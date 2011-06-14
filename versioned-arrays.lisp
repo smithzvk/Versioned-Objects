@@ -73,13 +73,15 @@
 ;; Some niceties...
 
 (defun va-dimensions (v-arr)
-  (if (arrayp (versioned-array-car v-arr))
-      (array-dimensions (versioned-array-car v-arr))
-      (va-dimensions (versioned-array-cdr v-arr)) ))
+  (bt:with-recursive-lock-held ((versioned-array-lock v-arr))
+    (if (arrayp (versioned-array-car v-arr))
+        (array-dimensions (versioned-array-car v-arr))
+        (va-dimensions (versioned-array-cdr v-arr)) )))
 
 (defun va-dimension (v-arr n)
   (nth n (va-dimensions v-arr)) )
 
 (defmethod print-object ((obj versioned-array) str)
-   (varef obj 0 0)
-   (print (versioned-array-car obj) str) )
+  (bt:with-recursive-lock-held ((versioned-array-lock v-arr))
+    (varef obj 0 0)
+    (print (versioned-array-car obj) str) ))
