@@ -24,11 +24,35 @@
 ;; delta at the same time.
 
 (defun varef (v-arr &rest idx)
+  (multiple-value-bind (array changes) (get-array v-arr)
+    (invert-changes (cdr v-arr) changes v-arr)
+    (setf (car v-arr) array
+          (cdr v-arr) nil )
+    (apply #'aref (car v-arr) idx) ))
+
+(defun get-array (v-arr)
   (if (arrayp (car v-arr))
-      (apply #'aref (car v-arr) idx)
-      (if (equal (rest (first v-arr)) idx)
-          (first (first v-arr))
-          (varef (rest v-arr)) )))
+      (values (car v-arr) nil)
+      (multiple-value-bind (array changes)
+          (get-array (cdr v-arr))
+        (destructuring-bind (new-val &rest idx) (car v-arr)
+          (let ((old-val (apply #'aref array idx)))
+            (setf (apply #'aref array idx) new-val)
+            (values array
+                    (cons (cons old-val idx) changes) ))))))
+
+(defun invert-changes (old-v-arr changes last)
+  (cond ((null changes) nil)
+        (t (setf (cdr old-v-arr) last
+                 (car old-v-arr) (car changes) )
+         (invert-changes (cdr old-v-arr) (cdr changes) old-v-arr) )))
 
 (define-modf-function varef 1 (new-val v-arr &rest idx)
-  (cons (cons new-val idx) v-arr) )
+  (let ((old-value
+         ;; This moves the array to our version
+         (apply #'varef v-arr idx) ))
+    (let ((arr (car v-arr)))
+      (setf (apply #'aref (car v-arr) idx) new-val)
+      (setf (cdr v-arr) (list arr)
+            (car v-arr) (cons old-value idx) )))
+  (cdr v-arr) )
