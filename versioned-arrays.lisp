@@ -2,7 +2,9 @@
 (defpackage :versioned-arrays
     (:use :cl :bt :iter :modf)
   (:export #:make-versioned-array
-           #:varef ))
+           #:varef
+           #:va-dimensions
+           #:va-dimension))
 
 (in-package :versioned-arrays)
 
