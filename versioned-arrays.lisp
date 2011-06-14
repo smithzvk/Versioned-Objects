@@ -6,8 +6,6 @@
 
 (in-package :versioned-arrays)
 
-(modf-def:defstruct ver-array mods array)
-
 (defun make-versioned-array (dimensions
                              &rest args
                              &key (element-type t)
@@ -17,16 +15,14 @@
   "Make a versioned array."
   (when (or adjustable fill-pointer displaced-to displaced-index-offset)
     (error "The capabilities: adjustable, fill-pointer, displaced-to, displaced-index-offset are not implemented yet") )
-  (make-ver-array :mods nil :array (apply #'make-array dimensions args)) )
+  (apply #'make-array dimensions args) )
 
 (defun varef (v-arr &rest idx)
-  (let ((result
-         (iter (for (new-val . jdx) in (ver-array-mods v-arr))
-               (finding new-val such-that (equal idx jdx)) )))
-    (if result
-        result
-        (apply #'aref (ver-array-array v-arr) idx) )))
+  (if (consp v-arr)
+      (if (equal (rest (first v-arr)) idx)
+          (first (first v-arr))
+          (varef (rest v-arr)) )
+      (apply #'aref v-arr idx) ))
 
 (define-modf-function varef 1 (new-val v-arr &rest idx)
-  (modf (ver-array-mods v-arr)
-        (cons (cons new-val idx) (ver-array-mods v-arr)) ))
+  (cons (cons new-val idx) v-arr) )
