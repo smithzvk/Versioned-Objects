@@ -82,6 +82,6 @@
   (nth n (va-dimensions v-arr)) )
 
 (defmethod print-object ((obj versioned-array) str)
-  (bt:with-recursive-lock-held ((versioned-array-lock v-arr))
+  (bt:with-recursive-lock-held ((versioned-array-lock obj))
     (varef obj 0 0)
     (print (versioned-array-car obj) str) ))
