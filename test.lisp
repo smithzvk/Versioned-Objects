@@ -9,6 +9,9 @@
 
 (in-root-suite)
 
+(defun run-tests ()
+  (contention) )
+
 (defsuite* :versioning)
 
 (deftest term-by-term-equivalent-2d (a b &optional (test 'eql))
