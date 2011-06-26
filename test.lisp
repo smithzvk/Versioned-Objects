@@ -10,6 +10,7 @@
 (in-root-suite)
 
 (defun run-tests ()
+  (2d-test)
   (contention) )
 
 (defsuite* :versioning)
@@ -40,22 +41,23 @@
 (defsuite* :thread-safety)
 
 (deftest contention ()
+  #+threads-support
   (let* ((arr (make-versioned-array
                '(3 3) :initial-contents
                '((1 2 3) (4 5 6) (7 8 9)) ))
          (new-arr arr) )
     (iter (for i below 1000)
-          (let* ((rani (random 3))
-                 (ranj (random 3))
-                 (curr-value (varef arr rani ranj))
-                 (ran-val (random 10)) )
-            (setf new-arr (modf (varef new-arr rani ranj) ran-val))
-            (setf new-arr (modf (varef new-arr rani ranj) curr-value)) ))
+      (let* ((rani (random 3))
+             (ranj (random 3))
+             (curr-value (varef arr rani ranj))
+             (ran-val (random 10)) )
+        (setf new-arr (modf (varef new-arr rani ranj) ran-val))
+        (setf new-arr (modf (varef new-arr rani ranj) curr-value)) ))
     ;; Now we have two arrays with a large delta between them.
     (bt:make-thread (lambda () (iter (for i below 100)
-                                (varef arr (random 3) (random 3)) )))
+                            (varef arr (random 3) (random 3)) )))
     (bt:make-thread (lambda () (iter (for i below 100)
-                                (varef new-arr (random 3) (random 3)) )))
+                            (varef new-arr (random 3) (random 3)) )))
     (term-by-term-equivalent-2d arr new-arr) ))
 
 (defsuite* :timing)
