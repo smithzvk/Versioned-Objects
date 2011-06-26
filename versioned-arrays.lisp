@@ -1,6 +1,6 @@
 
 (defpackage :versioned-arrays
-  (:use :cl :bt :iter :modf)
+  (:use :cl :bt :modf)
   (:export #:make-versioned-array
            #:varef
            #:va-dimensions

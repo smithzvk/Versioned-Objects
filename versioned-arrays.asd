@@ -18,4 +18,4 @@ After any access or modification, the array is rebased, or moved to the verion
 you are at, meaning that changes or accesses from this version are now O\(1)."
   :components ((:file "versioned-arrays"))
   :serial t
-  :depends-on (:iterate :bordeaux-threads :modf) )
+  :depends-on (:bordeaux-threads :modf) )
