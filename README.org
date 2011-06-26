@@ -16,14 +16,12 @@ are only a few edits apart.  In fact in this case, the asymptotic behavior is
 constant time, just like with normal mutable arrays.
 
 Arrays are created with =make-versioned-array=, elements are accessed with
-=varef=, and arrays are modified using =modf= like so =(modf (varef array index)
-5)=.
+=varef=, and arrays are modified using =modf=.
 
 ** Thread safety
 
-The library should be thread safe, but this comes at the price that a given
-array has a single lock that is held even for reads.  Thus contention can be a
-problem.
+The library should be thread safe, but keep in mind, a given array has a single
+lock that is held even for reads.  Thus contention can be a problem.
 
 ** Installation
 
