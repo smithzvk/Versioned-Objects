@@ -1,26 +1,26 @@
 
-* Versioned arrays
+* Versioned Objects
 
-Versioned-Arrays is a library allowing you to use arrays in a relatively cheap
-manner.  See [[http://directed-procrastination.blogspot.com/2011/06/versioned-arrays.html][my blog post]] on it for more in depth treatment of the ideas behind
-it.
+The is an extension of the idea of versioned arrays where any object that holds
+data can be versioned.  This provides a reasonably cheap method of storing
+objects without many differences between them.
 
 ** Where can it be used
 
-Basically it allows you to modify parts of a "versioned array," which is a small
-wrapper around a Lisp array, and the resultant modified array, and the original
-array, only requires /O(N+m)/ storage where /N/ is the number of elements in the
-array and /m/ is the number of edits that are made in between the two versions.
-It works very well for problems where you are interested in a set of arrays that
-are only a few edits apart.  In fact in this case, the asymptotic behavior is
-constant time, just like with normal mutable arrays.
+Basically it allows you to modify parts of a "versioned object," which is a
+small wrapper around a Lisp object, and the resultant modified object and the
+original object only requires /O(N+m)/ storage where /N/ is the number of
+elements in the object and /m/ is the number of edits that are made in between
+the two versions.  It works very well for problems where you are interested in a
+set of objects that are only a few edits apart.  In fact in this case, the
+asymptotic behavior is constant time, just like with normal mutable objects.
 
-Arrays are created with =make-versioned-array=, elements are accessed with
-=varef=, and arrays are modified using =modf=.
+Objects are created with =make-versioned-object=, elements are accessed with
+=varef=, and objects are modified using =modf=.
 
 ** Thread safety
 
-The library should be thread safe, but keep in mind, a given array has a single
+The library should be thread safe, but keep in mind, a given object has a single
 lock that is held even for reads.  Thus contention can be a problem.
 
 ** Installation
