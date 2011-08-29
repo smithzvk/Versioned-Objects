@@ -106,33 +106,36 @@ This assumes that locks are already held."
 
 ;; <<>>=
 (defmacro vmodf (place value &rest more)
-  "Add a new entry ot the version tree of the underlying container.  This new
-version is returned.  Several place/value pairs can be given.  In between each
-pair, a symbol must be given to specify where the result of the previous
-calculation should be bound for the rest of the VMODF place/value pairs."
+  "Add a new entry ot the version tree of the underlying container and return
+that new version of the object.  Several place/value pairs can be given.  In
+between each pair, a symbol must be given to specify where the result of the
+previous calculation should be bound for the rest of the VMODF place/value
+pairs."
   ;; First we need to find the "container" variable
   (let ((container (find-container place)))
-    (alexandria:with-gensyms (val-sym v-obj)
-      `(let ((,val-sym ,value))
-         (progn;;bt:with-lock-held ((vo-lock ,container))
-           (raise-object! ,container)
-           (let* ((,v-obj ,container)
-                  (,container (vo-car ,v-obj))
-                  (getter (lambda () ,place))
-                  (setter (lambda (new-val) (setf ,place new-val)))
-                  ;; Grab the old value
-                  (old-value (funcall getter))
-                  (delta (list old-value getter setter)) )
-             ;; Set the new value
-             (funcall setter ,val-sym)
-             ;; Update the versioned object with the change
-             (setf (vo-cdr ,v-obj) (%make-versioned-object
-                                    :car ,container
-                                    :lock (vo-lock ,v-obj) )
-                   (vo-car ,v-obj) delta )
-             ,(if more `(let ((,(first more) (vo-cdr ,v-obj)))
-                          (vmodf ,@(cdr more)) )
-                  `(vo-cdr ,v-obj) )))))))
+    (alexandria:with-gensyms (val-sym v-obj new-version)
+      `(let* ((,val-sym ,value)
+              (,v-obj ,container)
+              (,new-version
+                (bt:with-lock-held ((vo-lock ,container))
+                  (raise-object! ,container)
+                  (let* ((,container (vo-car ,v-obj))
+                         (getter (lambda () ,place))
+                         (setter (lambda (new-val) (setf ,place new-val)))
+                         ;; Grab the old value
+                         (old-value (funcall getter))
+                         (delta (list old-value getter setter)) )
+                    ;; Set the new value
+                    (funcall setter ,val-sym)
+                    ;; Update the versioned object with the change
+                    (setf (vo-cdr ,v-obj) (%make-versioned-object
+                                           :car ,container
+                                           :lock (vo-lock ,v-obj) )
+                          (vo-car ,v-obj) delta )
+                    (vo-cdr ,v-obj) ))))
+         ,(if more `(let ((,(first more) ,new-version))
+                      (vmodf ,@(cdr more)) )
+              new-version )))))
 
 ;; @The printing method needs to make the specified version current, then it
 ;; prints it like any other object.
@@ -141,6 +144,15 @@ calculation should be bound for the rest of the VMODF place/value pairs."
 (defmethod print-object ((obj versioned-object) stream)
   (with-versioned-object obj
     (format stream "#<Versioned ~A>" obj) ))
+
+;; @\section{Thread Safety}
+
+;; @There are pretty serious concerns about deadlock.  If there are two threads
+;; each accessing two version of the same data, and one is reading from an
+;; object and needs to communicate with the other thread which also needs to
+;; accessing the data, we have a classic deadlock situation.  This is
+;; particularly dangerous here because even reads require locking the data which
+;; most people take to be a non-locking operation.
 
 ;; @\section{Random Thoughts}
 
