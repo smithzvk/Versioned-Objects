@@ -56,7 +56,7 @@ several times, something you cannot do, but might get confused and do." )
 ;; deadlock issues (I am working on something to reduce the chances of deadlock
 ;; to a mere performance penalty).
 
-;; <<>>=
+;;<<>>=
 (defmacro with-versioned-object (object &body body)
   `(bt:with-lock-held ((vo-lock ,object))
      (raise-object! ,object)
@@ -66,10 +66,9 @@ several times, something you cannot do, but might get confused and do." )
 ;;<<>>=
 (defmacro with-versioned-objects (objects &body body)
   (if objects
-      `(bt:with-lock-held ((vo-lock ,(car objects)))
-         (raise-object! ,(car objects))
-         (let ((,(car objects) (vo-car ,(car objects))))
-           (with-versioned-objects ,(cdr objects) ,@body) ))
+      `(with-versioned-object ,(car objects)
+         (with-versioned-objects ,(cdr objects)
+           ,@body ))
       `(progn ,@body) ))
 
 ;; @The `function' <<raise-object!>> makes your version of the object current.
