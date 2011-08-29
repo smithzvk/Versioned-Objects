@@ -1,88 +1,156 @@
 
 (defpackage :versioned-objects
   (:use :cl :bt :modf)
-  (:export #:make-versioned-object
-           #:varef
-           #:va-dimensions
-           #:va-dimension))
+  (:import-from modf find-container)
+  (:export #:version
+           #:versioned-object
+           #:with-versioned-object #:with-versioned-objects
+           #:vmodf ))
 
 (in-package :versioned-objects)
 
+;; @Because this breaks the basic assumptions that make Modf work, this has to
+;; be implemented as a new macro.  This means that the mechanism which it uses
+;; is a completely different one.  For instance, it never builds new objects.  I
+;; considered implementing it as a special syntax within Modf for the sake of
+;; combining similar purposes if not similar mechanisms, but decided that this
+;; approach would lead to a lot of confusion.  Versioned objects are inherently
+;; tied to a central piece of data wrapped in a versioning data structure.  This
+;; just doesn't jive with the mindset of Modf.
+
+;; @The structure <<versioned-object>> is a cons-cell like structure that makes
+;; up the version tree for your object.
+
+;;<<versioned-object>>=
 (defstruct (versioned-object (:constructor %make-versioned-object)
                              (:conc-name :vo-) )
   car cdr lock )
 
-(defun make-versioned-object (dimensions
-                              &rest args
-                              &key (element-type t)
-                                   initial-element initial-contents
-                                   adjustable fill-pointer
-                                   displaced-to displaced-index-offset )
-  "Make a versioned object."
-  (declare (ignorable element-type initial-element initial-contents
-                      adjustable fill-pointer displaced-to displaced-index-offset ))
-  (when (or adjustable fill-pointer displaced-to displaced-index-offset)
-    (error "The capabilities: adjustable, fill-pointer, displaced-to, displaced-index-offset are not implemented yet") )
-  (%make-versioned-object :car (apply #'make-object dimensions args)
-                          :lock (bt:make-lock) ))
+;; @The function <<version>> takes an object and wraps it in a
+;; <<versioned-object>> structure if it is not already a versioned object.  This
+;; means that it is not possible to version the <<versioned-object>> structure.
 
-;; Basically this works like this.  A versioned object is a list whose last
+;;<<>>=
+(defun version (object)
+  "Convert an object into a versioned object."
+  (if (versioned-object-p object)
+      object
+      (%make-versioned-object :car object
+                              :lock (bt:make-lock) )))
+
+;; @Basically this works like this.  A versioned object is a list whose last
 ;; element is the object.  When you access a value from the object, the object
 ;; moves to the first element of the list (making it a list of length 1) while
 ;; at the same time reversing the list after it and inverting the deltas.
 
-(defun varef (v-arr &rest idx)
-  (bt:with-lock-held ((vo-lock v-arr))
-    (raise-object! v-arr)
-    (apply #'aref (vo-car v-arr) idx) ))
+;; Not being used right now.
+(defvar *locked-by-form* nil
+  "This variable marks what has been locked by a given WITH-VERSIONED form.
+This will allow it do detect if a single form tries to hold the same lock
+several times, something you cannot do, but might get confused and do." )
 
-(defun raise-object! (v-arr)
+;; @The macros <<with-versioned-object>> and <<with-versioned-objects>> are a
+;; couple macros that allow you to access your versioned data.  These will make
+;; the version you are referencing current and bind the variable to the
+;; underlying data.  A lock is held while inside this environment, so be wary of
+;; deadlock issues (I am working on something to reduce the chances of deadlock
+;; to a mere performance penalty).
+
+;; <<>>=
+(defmacro with-versioned-object (object &body body)
+  `(bt:with-lock-held ((vo-lock ,object))
+     (raise-object! ,object)
+     (let ((,object (vo-car ,object)))
+       ,@body )))
+
+;;<<>>=
+(defmacro with-versioned-objects (objects &body body)
+  (if objects
+      `(bt:with-lock-held ((vo-lock ,(car objects)))
+         (raise-object! ,(car objects))
+         (let ((,(car objects) (vo-car ,(car objects))))
+           (with-versioned-objects ,(cdr objects) ,@body) ))
+      `(progn ,@body) ))
+
+;; @The `function' <<raise-object!>> makes your version of the object current.
+;; This involves a lot of mutation and thus a lock is held.
+
+;;<<>>=
+(defun raise-object! (v-obj)
   "Bubble object to beginning of list, along the way back, reverse the list.
 This assumes that locks are already held."
-  (if (not (vo-cdr v-arr))
+  (if (not (vo-cdr v-obj))
       nil
       (progn
-        (raise-object! (vo-cdr v-arr))
-        (destructuring-bind (new-val &rest idx)
-            (vo-car v-arr)
+        (raise-object! (vo-cdr v-obj))
+        (destructuring-bind (new-val getter setter &rest idx)
+            (vo-car v-obj)
           ;; Move the object
-          (setf (vo-car v-arr)
-                (vo-car (vo-cdr v-arr)) )
+          (setf (vo-car v-obj)
+                (vo-car (vo-cdr v-obj)) )
           ;; Invert delta
-          (setf (vo-car (vo-cdr v-arr))
-                (cons (apply #'aref (vo-car v-arr) idx) idx) )
+          (setf (vo-car (vo-cdr v-obj))
+                (list* (apply getter
+                              (vo-car v-obj) idx )
+                       getter setter idx ))
           ;; Mutate object
-          (setf (apply #'aref (vo-car v-arr) idx)
-                new-val )
+          (apply setter new-val (vo-car v-obj) idx)
           ;; Reverse the list
-          (setf (vo-cdr (vo-cdr v-arr))
-                v-arr )
+          (setf (vo-cdr (vo-cdr v-obj))
+                v-obj )
           ;; Terminate the list
-          (setf (vo-cdr v-arr) nil) ))))
+          (setf (vo-cdr v-obj) nil) ))))
 
-(define-modf-function varef 1 (new-val v-arr &rest idx)
-  (bt:with-lock-held ((vo-lock v-arr))
-    (raise-object! v-arr)
-    (let* ((arr (vo-car v-arr))
-           (old-value (apply #'aref arr idx)) )
-      (setf (apply #'aref arr idx) new-val)
-      (setf (vo-cdr v-arr) (%make-versioned-object
-                            :car arr
-                            :lock (vo-lock v-arr) )
-            (vo-car v-arr) (cons old-value idx) ))
-    (vo-cdr v-arr) ))
+;; @The macro <<vmodf>> acts as the main entry point.  It has the same syntax as
+;; <<modf>> except no special treatment for <<modf-eval>>.
 
-;; Some niceties...
+;; <<>>=
+(defmacro vmodf (place value &rest more)
+  "Add a new entry ot the version tree of the underlying container.  This new
+version is returned.  Several place/value pairs can be given.  In between each
+pair, a symbol must be given to specify where the result of the previous
+calculation should be bound for the rest of the VMODF place/value pairs."
+  ;; First we need to find the "container" variable
+  (let ((container (find-container place)))
+    (alexandria:with-gensyms (val-sym v-obj)
+      `(let ((,val-sym ,value))
+         (progn;;bt:with-lock-held ((vo-lock ,container))
+           (raise-object! ,container)
+           (let* ((,v-obj ,container)
+                  (,container (vo-car ,v-obj))
+                  (getter (lambda () ,place))
+                  (setter (lambda (new-val) (setf ,place new-val)))
+                  ;; Grab the old value
+                  (old-value (funcall getter))
+                  (delta (list old-value getter setter)) )
+             ;; Set the new value
+             (funcall setter ,val-sym)
+             ;; Update the versioned object with the change
+             (setf (vo-cdr ,v-obj) (%make-versioned-object
+                                    :car ,container
+                                    :lock (vo-lock ,v-obj) )
+                   (vo-car ,v-obj) delta )
+             ,(if more `(let ((,(first more) (vo-cdr ,v-obj)))
+                          (vmodf ,@(cdr more)) )
+                  `(vo-cdr ,v-obj) )))))))
 
-(defun vo-dimensions (v-arr)
-  (bt:with-lock-held ((vo-lock v-arr))
-    (raise-object! v-arr)
-    (object-dimensions (vo-car v-arr)) ))
+;; @The printing method needs to make the specified version current, then it
+;; prints it like any other object.
 
-(defun vo-dimension (v-arr n)
-  (nth n (vo-dimensions v-arr)) )
+;; <<>>=
+(defmethod print-object ((obj versioned-object) stream)
+  (with-versioned-object obj
+    (format stream "#<Versioned ~A>" obj) ))
 
-(defmethod print-object ((obj versioned-object) str)
-  (bt:with-lock-held ((vo-lock obj))
-    (raise-object! obj)
-    (print (vo-car obj) str) ))
+;; @\section{Random Thoughts}
+
+;; @We might want to implement <<with-versioned-object>> via
+;; <<symbol-macrolet>>.  This will remove the possibility of of editting the
+;; object, which would corrupt (potentially) all other versions of the object.
+
+;; @Another thought.  Perhaps there is a setf expansion we can define for our
+;; <<symbol-macrolet>> form that would allow us to detect that this needs to be
+;; a versioned edit.  That way, we could actually use <<setf>> as <<modf>> in
+;; the environment of a <<with-versioned-object>> form.  This would be nice, but
+;; possibly confusing.  Perhaps the name should be renamed to
+;; <<with-object-as-immutable>>.
