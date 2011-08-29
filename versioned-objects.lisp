@@ -9,6 +9,24 @@
 
 (in-package :versioned-objects)
 
+;; @\section{introduction}
+
+;; @Versioned-objects is a library that brings general verioning to Common Lisp.
+;; This allows you to use arbitrary data structures in a functional way without
+;; facing the cost of copying the data structure on modification.  Versioning of
+;; data structures is a method that has very attractive performance (usually
+;; constant time) in many use cases such as in backtracking search.
+
+;; @This can be viewed as a sister project of Modf, another way to achieve
+;; functional data manipulation in Common Lisp.  Modf works well when the data
+;; structure you are using supports functional manipulation but relies on
+;; copying when it doesn't.  Versioned-objects only relies on copying when it is
+;; faster to do so than use the versioning mechanism.  Versioning is usually the
+;; preferable approach if you are dealing with large structures where copying is
+;; an expensive operation.
+
+;; @\section{Implementation}
+
 ;; @Because this breaks the basic assumptions that make Modf work, this has to
 ;; be implemented as a new macro.  This means that the mechanism which it uses
 ;; is a completely different one.  For instance, it never builds new objects.  I
