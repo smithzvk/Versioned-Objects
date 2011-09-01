@@ -32,28 +32,28 @@
 ;; functional data manipulation in Common Lisp.  In many ways it achieves the
 ;; same goals as Modf but via drastically different mechanisms.
 
-;; 1. Modf works well when the data structure you are using supports functional
+;; @1. Modf works well when the data structure you are using supports functional
 ;; manipulation while Versioned-objects only works for data with defined {\em
 ;; setf} expansions but performance determined by how quickly the data can be
 ;; accessed and mutated, not functionally modified.
 
-;; 2. Modf allows you to work with the native datatypes in Common Lisp meaning
+;; @2. Modf allows you to work with the native datatypes in Common Lisp meaning
 ;; your data will work in any function without further consideration while
 ;; Versioned-objects relies of wrapping the data, and thus special care must be
 ;; taken when calling functions with your versioned data as arguments.
 
-;; 3. Modf returns objects that may share memory, but are completely independent
+;; @3. Modf returns objects that may share memory, but are completely independent
 ;; otherwise, thereby making them perfect for multithreaded programs.
 ;; Versioned-objects creates a network of interconnected data which, other than
 ;; using a few special methods, cannot be used in any asynchronous fashion at
 ;; all (the structure needs to be locked access by only one thread at a time,
 ;; even for reads).
 
-;; 4. Modf must resort to copying on any object without persistent
+;; @4. Modf must resort to copying on any object without persistent
 ;; characteristics.  Versioned-objects only relies on copying when it is faster
 ;; to do so than use the versioning mechanism.
 
-;; In general, these two libraries overlap in functionality, but are useful at
+;; @In general, these two libraries overlap in functionality, but are useful at
 ;; two different limits of the data spectrum.  Modf is useful when objects are
 ;; small (and thus cheap to copy) or have persistent characteristics (like
 ;; singly linked lists or binary trees) or are involved in parallel execution.
@@ -63,7 +63,7 @@
 
 ;; @\subsection{Simple Usage}
 
-;; Using Versioned-objects is simple.  You take any object and call the function
+;; @Using Versioned-objects is simple.  You take any object and call the function
 ;; <<version>> on it.  This will transform the object into a versioned-object.
 ;; In general, the object passed to <<version>> should never be accessed or
 ;; mutated after calling <<version>>.  At this point you may make cheap copies
@@ -71,7 +71,7 @@
 ;; new copy.  There are a few options you can pass to <<version>> that will
 ;; determine how the version tree is maintained, but we'll leave that for later.
 
-;; To access the data in your versioned-object, you must use the functions
+;; @To access the data in your versioned-object, you must use the functions
 ;; <<vfuncall>> and <<vapply>> which work precisely as their {\em sans v}
 ;; counterparts, but work with versioned data in their argument lists.  Later on
 ;; we will see how to define your own accessor functions which may be faster and
@@ -175,7 +175,7 @@ pairs."
 
 ;; @\section{Accessing data in a versioned object}
 
-;; I'm sorry to say, a versioned object isn't just a wrapper that magically
+;; @I'm sorry to say, a versioned object isn't just a wrapper that magically
 ;; delivers new functionality.  Due to the inherent frailty that comes with data
 ;; mutation, accessing the data within a versioned object must be done with the
 ;; utmost of caution.  With this in mind the interface for accessing the data in
@@ -206,7 +206,7 @@ list."
 (defun vapply (fn &rest args)
   (apply #'vfuncall fn (apply #'list* args)))
 
-;; We recognize that your data is less useful when it is locked into a
+;; @We recognize that your data is less useful when it is locked into a
 ;; <<verioned-object>> structure, so we allow for a way to temporarily retrieve
 ;; it.  In order to get the raw data, use the macros <<with-versioned-object>>
 ;; and <<with-versioned-objects>>.  You may pass this underlying data to another
@@ -257,18 +257,18 @@ list."
 
 ;; @\section{Random Thoughts}
 
-;; vfuncall and vapply
+;; @vfuncall and vapply
 
-;; Eval arguments
+;; @Eval arguments
 
-;; After evaluation, run through arguments and lock on any versioned structures
+;; @After evaluation, run through arguments and lock on any versioned structures
 ;; using the main object lock.
 
-;; In case of deadlock, try to use lock on the in-place object lock and use
+;; @In case of deadlock, try to use lock on the in-place object lock and use
 ;; in-place access and versioning tools to move ahead.  If all else fails, bail
 ;; out.
 
-;; Many in-place changes can happen at once, however it seems that the any
+;; @Many in-place changes can happen at once, however it seems that the any
 ;; in-place operation is dangerous if the main lock is released.  This means
 ;; that we should either make the.
 
@@ -294,7 +294,7 @@ list."
 ;; single generalized Modf statement in any syntax I can think of.
 
 
-;; \subsection{Versioned objects are tricky}
+;; @\subsection{Versioned objects are tricky}
 
 ;; @Take, for instance, the expression:
 
@@ -302,7 +302,7 @@ list."
 ;;        (arr2 (vmodf (aref arr1 0) 5)) )
 ;;   (aref arr1 (aref arr2 0)) )
 
-;; It is impossible to retrofit <<compare-arrays>> as a function that can use
+;; @It is impossible to retrofit <<compare-arrays>> as a function that can use
 ;; versioned data.  This is because the access happens within the function,
 ;; completely out of our control.  Thus {\em arr1} and {\em arr2} must be Lisp
 ;; arrays yet they refer to the same array.  In such a case, it seems that a
@@ -344,22 +344,22 @@ list."
 ;; structure instances, four data structures where this library will likely find
 ;; the most use.
 
-(defmacro time-operation ((&key (repeat 10000) (min-sample-time 5))
-                          &body body )
-  `(let* ((start-time (get-internal-real-time))
-          (end-time start-time)
-          (times (iter
-                   (for times from 0)
-                   (until (> (setf end-time (get-internal-real-time))
-                             (+ start-time
-                                (* ,min-sample-time
-                                   internal-time-units-per-second ))))
-                   (iter (for i below ,repeat)
-                     ,@body )
-                   (finally (return times)) )))
-     (float
-      (/ (* ,repeat times) (/ (- end-time start-time)
-                              internal-time-units-per-second )) 0d0)))
+;; (defmacro time-operation ((&key (repeat 10000) (min-sample-time 5))
+;;                           &body body )
+;;   `(let* ((start-time (get-internal-real-time))
+;;           (end-time start-time)
+;;           (times (iter
+;;                    (for times from 0)
+;;                    (until (> (setf end-time (get-internal-real-time))
+;;                              (+ start-time
+;;                                 (* ,min-sample-time
+;;                                    internal-time-units-per-second ))))
+;;                    (iter (for i below ,repeat)
+;;                      ,@body )
+;;                    (finally (return times)) )))
+;;      (float
+;;       (/ (* ,repeat times) (/ (- end-time start-time)
+;;                               internal-time-units-per-second )) 0d0)))
 
 ;; This doesn't work.  Why?  The printer!?!
 ;; (defun measure-rebase-time (n-edits)
@@ -380,25 +380,25 @@ list."
 ;; @Preliminary results suggest that using a more speciallized approach to
 ;; versioning can push rebase speed up by ~40%.
 
-(defun measure-version-time (n-versions-before-rebase)
-  "Measure how much time it takes to create new versions of the data if building
-off of the most recent version."
-  (let ((arr1 (version (make-array '(10) :initial-element 0))))
-    (let ((versions-per-second
-            (time-operation ()
-              (iter (for i below n-versions-before-rebase)
-                (for new-arr
-                  initially (vmodf (aref arr1 (random 10)) (random 10))
-                  then (vmodf (aref new-arr (random 10)) (random 10)) )
-                (finally (return new-arr)) ))))
-      (values versions-per-second) )))
+;; (defun measure-version-time (n-versions-before-rebase)
+;;   "Measure how much time it takes to create new versions of the data if building
+;; off of the most recent version."
+;;   (let ((arr1 (version (make-array '(10) :initial-element 0))))
+;;     (let ((versions-per-second
+;;             (time-operation ()
+;;               (iter (for i below n-versions-before-rebase)
+;;                 (for new-arr
+;;                   initially (vmodf (aref arr1 (random 10)) (random 10))
+;;                   then (vmodf (aref new-arr (random 10)) (random 10)) )
+;;                 (finally (return new-arr)) ))))
+;;       (values versions-per-second) )))
 
-(defun measure-in-place-walk-time (n-edits)
-  "Measure how long it takes to read a value from the datastructure without
-rebasing it."
-  )
+;; (defun measure-in-place-walk-time (n-edits)
+;;   "Measure how long it takes to read a value from the datastructure without
+;; rebasing it."
+;;   )
 
-(defun measure-in-place-version-time (n-edits)
-  "Measure how long it takes to add a new version to the data structure without
-rebasing it.  This implicitly includes a read."
-  )
+;; (defun measure-in-place-version-time (n-edits)
+;;   "Measure how long it takes to add a new version to the data structure without
+;; rebasing it.  This implicitly includes a read."
+;;   )
