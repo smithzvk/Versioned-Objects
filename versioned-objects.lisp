@@ -4,6 +4,7 @@
   (:import-from modf find-container)
   (:export #:version
            #:versioned-object
+           #:vfuncall #:vapply
            #:with-versioned-object #:with-versioned-objects
            #:vmodf ))
 
