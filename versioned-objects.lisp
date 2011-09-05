@@ -242,10 +242,17 @@ list."
 ;; @The printing method needs to make the specified version current, then it
 ;; prints it like any other object.
 
+(defvar *versioned-object-printer* t
+  "When T, objects are printed specially as \"#<Versioned <OBJECT>>\".  If NIL
+then the true object is printed (a structure) whose representation can be quite
+large.  This is useful for debugging as the special printer, in general, alters
+the data structure." )
+
 ;;<<>>=
 (defmethod print-object ((obj versioned-object) stream)
-  (with-versioned-object obj
-    (format stream "#<Versioned ~A>" obj) ))
+  (if *versioned-object-printer*
+      (vfuncall 'format stream "#<Versioned ~A>" obj)
+      (call-next-method) ))
 
 ;; @\section{Thread Safety}
 
