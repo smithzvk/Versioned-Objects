@@ -40,7 +40,9 @@ implemented in portable Common Lisp apart from the multi-threading stuff.  No
 MOP tricks or heuristics are needed.  I dare say that if you have an ANSI
 compliant Lisp, this should work.  Even if you don't, it might.
 
-I test (successfully) in SBCL, CMUCL, CCL, ECL, CLISP, and ABCL.
+I test (mostly successfully) in SBCL, CMUCL, CCL, ECL, CLISP, and ABCL, although
+there seem to be intermittent failures in CMUCL and ECL and I clueless as to
+why.
 
 ** Efficiency
 
@@ -68,10 +70,10 @@ situation, but more work needs to be done.
 ** Ugh, something went horribly wrong!
 
 Okay, calm down, we'll get through this.  This library is tricky to debug.  The
-very first thing to do is set /versioned-objects::*versioned-object-printer*/ to
-/nil/.  That way introspection won't actually modify your objects, thereby
-removing or introducing new bugs.  Then you might place traces on /vfuncall/ and
-/vapply/.
+very first thing to do is set =versioned-objects::*versioned-object-printer*= to
+=nil=.  That way introspection won't actually modify your objects, thereby
+removing or introducing new bugs.  Then you might place traces on =vfuncall= and
+=vapply=.
 
 ** Installation
 
