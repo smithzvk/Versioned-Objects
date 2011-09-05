@@ -1,9 +1,9 @@
 
-(defpackage :versioned-object-test
+(defpackage :versioned-objects-test
   (:use :cl :stefil :versioned-objects :alexandria)
   (:export :run-tests) )
 
-(in-package :versioned-object-test)
+(in-package :versioned-objects-test)
 
 (in-root-suite)
 
@@ -80,3 +80,8 @@ fail, you probably did something pretty stupid."
                   '(1 nil 3 #(4 t 6))
                   (vmodf (aref (nth 3 obj) 1) t
                          & (nth 1 &) nil )) )))
+
+(deftest run-tests ()
+  (object-tests)
+  (nested-object-tests) )
+
