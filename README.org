@@ -28,7 +28,7 @@ use.  New versions are made via the =vmodf= macro, which behaves much like the
 You may have noticed that this library has a lot in common with Modf.  That is
 because they are used to solve the same problem but for different limits of that
 problem.  Modf is good for objects that can be modified with little copying (be
-they small or same structure with other versions).  Think lists, binary trees,
+they small or share structure with other versions).  Think lists, binary trees,
 small arrays (less than 30 elements or so, depends on the implementation).
 Versioned-objects is useful for objects that are expensive to copy.  Think
 arrays or hash tables with thousands to millions of elements/keys.
@@ -41,7 +41,7 @@ MOP tricks or heuristics are needed.  I dare say that if you have an ANSI
 compliant Lisp, this should work.  Even if you don't, it might.
 
 I test (mostly successfully) in SBCL, CMUCL, CCL, ECL, CLISP, and ABCL, although
-there seem to be intermittent failures in CMUCL and ECL and I clueless as to
+there seem to be intermittent failures in CMUCL and ECL and I am clueless as to
 why.
 
 ** Efficiency
