@@ -5,7 +5,7 @@ The is an extension of the idea of versioned arrays where any object that holds
 data can be versioned.  This provides a reasonably cheap method of storing
 objects without many differences between them.
 
-** Where can it be used
+** Where can it be used?
 
 Basically it allows you to modify parts of a "versioned object," which is a
 small wrapper around a Lisp object, and the resultant modified object and the
@@ -15,13 +15,46 @@ the two versions.  It works very well for problems where you are interested in a
 set of objects that are only a few edits apart.  In fact in this case, the
 asymptotic behavior is constant time, just like with normal mutable objects.
 
-Objects are created with =make-versioned-object=, elements are accessed with
-=varef=, and objects are modified using =modf=.
+Objects are created normally and converted to versioned objects using the
+function =version=.  Once an object has been versioned, it has essentially been
+converted into a immutable data type with reasonable asymptotic access and
+modification behavior.  To access data within your versioned object, use the
+functions =vfuncall= and =vapply= with the ordinary accessor function you would
+use.  New versions are made via the =vmodf= macro, which behaves much like the
+=modf= macro from the Modf library, which in turn is based on the =setf= macro.
+
+** Where does this fit in?
+
+You may have noticed that this library has a lot in common with Modf.  That is
+because they are used to solve the same problem but for different limits of that
+problem.  Modf is good for objects that can be modified with little copying (be
+they small or same structure with other versions).  Think lists, binary trees,
+small arrays (less than 30 elements or so, depends on the implementation).
+Versioned-objects is useful for objects that are expensive to copy.  Think
+arrays or hash tables with thousands to millions of elements/keys.
+
+** Efficiency
+
+This library is asymptotically quite efficient (if you are using it for the
+right purpose) and reasonably efficient in practice.  Some un-scientific and
+anecdotal benchmarks suggest that a backtracking algorithm written using this is
+a factor of ~15 or so slower than a similar algorithm written in a destructive
+manner.
+
+There are some plans to speed things up for specific data types like arrays and
+hash tables.  Also, I'm looking into speeding things up when you are trying to
+use it with objects with many edits separating them.
+
+Keep in mind that this kicks the pants off actually copying your data, which is
+the other option if you insist on using a mutation only data structure like a
+Lisp array and insist on using it in a functional way.
 
 ** Thread safety
 
-The library should be thread safe, but keep in mind, a given object has a single
-lock that is held even for reads.  Thus contention can be a problem.
+This library involves mutation and thus "thread safety" and general contention
+for data access between all versions of the data, even within the same thread,
+is a concern.  Some work has been done ensuring that you won't have a deadlock
+situation, but more work needs to be done.
 
 ** Installation
 
@@ -38,7 +71,6 @@ Additional dependencies for the test suite:
 
  1. Iterate
  2. Stefil
-
 
 ** License
 
