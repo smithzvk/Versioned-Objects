@@ -403,6 +403,71 @@ the data structure." )
 ;; assurance that at some level every part of an object is an atomic data type
 ;; which is not something Common Lisp guarantees.
 
+;; @\subsection{Tree Splitting}
+
+;; As the version tree grows, we expect (and do see) a reduction of access time
+;; and increase in the in memory size of the object.  The worst case access time
+;; is scales as the longest path in the tree.  The memory usage scales as the
+;; size of the version tree.  It is in our best interests to limit the size of
+;; the tree in some way as to optimize for performance and/or the in-memory size
+;; of the object.
+
+;; As a side note, you may wonder, are there any memory reductions associated
+;; with splitting the version tree.  At first glance, it appears that there are
+;; not, as each node in the tree corresponds to a version, and thus even if the
+;; tree is split, those versions are still valid.  The important part is to
+;; realize that the vast majority of versions are actually not referenced in the
+;; running program and only serve as a pathway of edits to get in between
+;; versions that are being used.  This means that a well placed split, could
+;; allow the garbage collector to reap many versions with no reference in the
+;; running program.
+
+;; @\subsubsection{Performance opimization}
+
+;; @While there are other benefits, first and foremost, this library was
+;; designed to give performance gains over copying large objects.  With this in
+;; mind many have designed methods of reducing the tree size in order to
+;; increase performance.
+
+;; @\subsubsubsection{Probablistic copying}
+
+;; @The absolute simplest method of tree size reduction is to split the tree at
+;; modification time, thereby limiting the size of the tree.  This is typically
+;; done probabilistically with probability $1/N$ where $N$ is the size of the
+;; object.  This means that we expect to never travel more than $N$ edits to get
+;; to the actual data.  This means that on any given access we might expect an
+;; additional $O(N)$ cost.
+
+;; @\subsubsubsection{Copy on long edit paths}
+
+;; @Since we are walking the edit path in between, we can calculate the length
+;; and decide whether a copy is appropriate based on comparing that length to
+;; the size of the object.  This will split the tree only when it is proven that
+;; it is more performant to do so.  It also means that it will add an additional
+;; $O(N)$ cost on some data accesses, and preferentially add this to the
+;; accesses that already take a long time to access.
+
+;; When considering where we should break the tree, one might think that it
+;; should be at the halfway point (a naive approach), or on an edge that most
+;; equally splits the number of nodes between the two trees (perhaps good for
+;; memory usage reduction).  The method I have developed is to split based on
+;; the number of traversals.  This will split the tree at the most used edit,
+;; removing it.  This splits the tree in a way that removes the most used path
+;; in the graph.
+
+;; @\subsubsection{$N$ and cost}
+
+;; @In the preceding sections, we use the number of edits $m$ and the size of
+;; the data $N$ as measures of how much work is being done.  This is fine except
+;; for the fact that we are comparing quantities involving $N$ with quantities
+;; involving $m$.  For tuning performance (memory or speed), we really should
+;; consider the actual cost rather than something proportional to the cost.  For
+;; instance, an edit might be considerably larger than an element in the data.
+;; Likewise with the cost of actually traversing an edit and accessing a data
+;; element.  As such, in the discussion above, we should really be concerned
+;; with the true cost of accessing and copying data, and traversing and creating
+;; edits.
+
 ;; @\section{Benchmarking}
 
 ;; @Usually I would aschew focusing on benchmarks, but because of the subtle
