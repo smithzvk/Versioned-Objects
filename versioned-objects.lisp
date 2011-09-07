@@ -311,21 +311,6 @@ the data structure." )
 
 ;; @\section{Random Thoughts}
 
-;; @vfuncall and vapply
-
-;; @Eval arguments
-
-;; @After evaluation, run through arguments and lock on any versioned structures
-;; using the main object lock.
-
-;; @In case of deadlock, try to use lock on the in-place object lock and use
-;; in-place access and versioning tools to move ahead.  If all else fails, bail
-;; out.
-
-;; @Many in-place changes can happen at once, however it seems that the any
-;; in-place operation is dangerous if the main lock is released.  This means
-;; that we should either make the.
-
 ;; @We provide special treatment for arrays, hash tables, classes, and
 ;; structures.  Other objects can either have special functions defined for
 ;; them, or then can use the general interface which is slower and perhaps more
