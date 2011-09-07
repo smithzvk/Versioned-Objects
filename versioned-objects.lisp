@@ -453,6 +453,45 @@ the data structure." )
 ;; with the true cost of accessing and copying data, and traversing and creating
 ;; edits.
 
+;; @\subsubsection{Splitting and Locking}
+
+;; @A secondary benefit of splitting version trees is that it reduces the
+;; overall contention for resources.  By splitting the tree, we can use two
+;; separate locks, allowing access to happen in parallel.  However, since we
+;; don't have a global registry of all versions of the data, we have to use a
+;; tricky method to update each side of the version tree with it's new locks.
+;; The procedure I have developed works like this:
+
+;; @\begin{enumerate}
+
+;; @\item Each version object has a cons cell tree of locks it needs to hold in
+;; order to access data.  This usually is a list of length one; one lock, $L_o$
+;; for the entire structure.  This list is the same object for all versions in
+;; the tree (so that it may be mutated later).
+
+;; @\item When a tree is split, we define two new locks, $L_l$ and $L_r$ which
+;; correspond to the two new trees, left and right.  The lock cons structure is
+;; destructively modified to include $L_l$ and $L_r$.  It now looks like
+;; {\texttt (Lo . ((Ll) . (Lr)))}.  This means that all objects in the original
+;; tree must lock the original and both of these new locks, therefore locking
+;; the entire tree to perform call <<raise-object!>>.  At this point we have two
+;; trees but we lock on both to do anything.
+
+;; @\item We then set the lock cons structure of the versions along the path on
+;; the left side to simply the <<cadr>> of its old value and to the <<cddr>> on
+;; the right side.  This has the effect of correctly setting the locks on the
+;; path in each tree.  At this point we have two trees with a few correct
+;; locking structures but we are guaranteed that the actual object is contained
+;; in one of these objects with the correct locking structure.
+
+;; @\item We then make have <<raise-object!>> check the locking structure on any
+;; edit walk and set the locking structure of both to the minimum depth tree
+;; between the two of them.  This will propogate the locking changes to any
+;; version that is actually accessed.  Further, old versions that lock too
+;; conservatively will not effect accesses with the newer locking structure.
+
+;; @\end{enumerate}
+
 ;; @\section{Benchmarking}
 
 ;; @Usually I would aschew focusing on benchmarks, but because of the subtle
