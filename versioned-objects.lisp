@@ -381,6 +381,27 @@ the data structure." )
 ;;     `(with-versioned-object ,cont-sym
 ;;        ,form )))
 
+;; @\subsection{On copy functions}
+
+;; @While the basic functionality of this library is easy enough to understand,
+;; it is pretty easy to find cases where the behavior is surprising if not down
+;; right baffling.  These cases actually make sense once you really understand
+;; what is happening.  Take for instance:
+
+;; (defparameter *obj-orig* (version '(1 2 3 #(4 5 6))))
+
+;; (defparameter *ver1* (vmodf (fourth *obj-orig*) #(x y z)))
+
+;; (defparameter *ver2* (vmodf (aref (fourth *obj-orig*) 1) t))
+
+;; @Both versions work exactly as expected.  However, if we specify a copy
+;; function that does a shallow copy, i.e. doesn't copy the array in the fourth
+;; element, <<*ver2*>> will fail and probably corrupt the entirety of the
+;; version tree.  You must copy everything that you have versioning
+;; modifications on.  A perfect deep copy would be safe, but this would be
+;; inefficient and I'm not even sure possible in Common Lisp.  We would need
+;; assurance that at some level every part of an object is an atomic data type
+;; which is not something Common Lisp guarantees.
 
 ;; @\section{Benchmarking}
 
