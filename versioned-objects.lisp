@@ -233,14 +233,14 @@ pairs."
 ;; structures as arguments.  This allows you to do most of what you probably
 ;; want to do.
 
-(defun vfuncall (&rest args)
+(defun vfuncall (fn &rest args)
   "Like FUNCALL except you can use versioned structures.  Call the function
 specified by the first argument with the rest of the arguments as its argument
 list."
   (let ((held-locks))
     (unwind-protect
          (let ((new-args
-                 (iter (for arg in args)
+                 (iter (for arg in (cons fn args))
                    (collecting
                     (cond ((versioned-object-p arg)
                            (bt:acquire-lock (vo-lock arg))
@@ -253,7 +253,7 @@ list."
         (bt:release-lock lock) ))))
 
 (defun vapply (fn &rest args)
-  (apply #'vfuncall fn (apply #'list* args)))
+  (apply #'vfuncall fn (apply #'list* args)) )
 
 ;; @We recognize that your data is less useful when it is locked into a
 ;; <<verioned-object>> structure, so we allow for a way to temporarily retrieve
