@@ -159,25 +159,23 @@
 This assumes that locks are already held."
   (if (not (vo-cdr v-obj))
       nil ; This value is ignored
-      (progn
+      (destructuring-bind (new-val getter setter)
+          (vo-car v-obj)
         (raise-object! (vo-cdr v-obj))
-        (let ((car (vo-car v-obj)))
-          (destructuring-bind (new-val getter setter)
-              car;;(vo-car v-obj)
-            ;; Move the object
-            (setf (vo-car v-obj)
-                  (vo-car (vo-cdr v-obj)) )
-            ;; Invert delta
-            (setf (vo-car (vo-cdr v-obj))
-                  (list (funcall getter)
-                        getter setter ))
-            ;; Mutate object
-            (funcall setter new-val)
-            ;; Reverse the list
-            (setf (vo-cdr (vo-cdr v-obj))
-                  v-obj )
-            ;; Terminate the list
-            (setf (vo-cdr v-obj) nil) )))))
+        ;; Move the object
+        (setf (vo-car v-obj)
+              (vo-car (vo-cdr v-obj)) )
+        ;; Invert delta
+        (setf (vo-car (vo-cdr v-obj))
+              (list (funcall getter)
+                    getter setter ))
+        ;; Mutate object
+        (funcall setter new-val)
+        ;; Reverse the list
+        (setf (vo-cdr (vo-cdr v-obj))
+              v-obj )
+        ;; Terminate the list
+        (setf (vo-cdr v-obj) nil) )))
 
 
 ;; @The macro <<vmodf>> acts as the main entry point.  It has the same syntax as
