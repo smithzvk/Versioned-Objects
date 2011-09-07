@@ -148,15 +148,19 @@ previous calculation should be bound for the rest of the VMODF place/value
 pairs."
   ;; First we need to find the "container" variable
   (let ((container (find-container place)))
-    (alexandria:with-gensyms (val-sym v-obj new-version)
+    (alexandria:with-gensyms (val-sym v-obj new-version container-sym)
       `(let* ((,val-sym ,value)
               (,v-obj ,container)
               (,new-version
                 (bt:with-lock-held ((vo-lock ,container))
                   (raise-object! ,container)
-                  (let* ((,container (vo-car ,v-obj))
-                         (getter (lambda () ,place))
-                         (setter (lambda (new-val) (setf ,place new-val)))
+                  (let* ((,container-sym (vo-car ,v-obj))
+                         (getter (lambda ()
+                                   (let ((,container ,container-sym))
+                                     ,place )))
+                         (setter (lambda (new-val)
+                                   (let ((,container ,container-sym))
+                                     (setf ,place new-val) )))
                          ;; Grab the old value
                          (old-value (funcall getter))
                          (delta (list old-value getter setter)) )
@@ -164,7 +168,7 @@ pairs."
                     (funcall setter ,val-sym)
                     ;; Make a new versioned object with the change
                     (setf (vo-cdr ,v-obj) (%make-versioned-object
-                                           :car ,container
+                                           :car ,container-sym
                                            :cdr nil
                                            :lock (vo-lock ,v-obj) )
                           (vo-car ,v-obj) delta )
