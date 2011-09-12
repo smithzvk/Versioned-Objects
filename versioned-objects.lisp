@@ -79,11 +79,13 @@
 ;;<<versioned-object>>=
 (defstruct (versioned-object (:constructor %make-versioned-object)
                              (:conc-name :vo-) )
-  car cdr lock )
+  car cdr lock (access-count 0)
+  copy-fn copy-cost-fn
+  tree-splitting-method
+  rebase )
 
 ;; @The function <<version>> takes an object and wraps it in a
-;; <<versioned-object>> structure if it is not already a versioned object.  This
-;; means that it is not possible to version the <<versioned-object>> structure.
+;; <<versioned-object>> structure.
 
 (defun collect-locks (lock-structures)
   (cons (car lock-structures)
@@ -117,10 +119,13 @@
                      (read-contention-resolution :error)
                      (tree-splitting-method :none) )
   "Convert an object into a versioned object."
-  (if (versioned-object-p object)
-      object
-      (%make-versioned-object :car object
-                              :lock (cons (bt:make-lock) nil) )))
+  (declare (ignore match-fn read-contention-resolution))
+  (%make-versioned-object :car object
+                          :lock (cons (bt:make-lock) nil)
+                          :copy-fn copy-fn
+                          :copy-cost-fn copy-cost-fn
+                          :tree-splitting-method tree-splitting-method
+                          :rebase rebase ))
 
 ;; @\subsection{Advanced control of the versioning of objects}
 
@@ -170,35 +175,76 @@
 ;; This involves a lot of mutation and thus a lock is held.
 
 ;;<<>>=
-(defun raise-object! (v-obj &optional (cost 0))
+(defun raise-object! (v-obj &optional (cost 0) (largest-access-count 0) force-copy)
   "Bubble object to beginning of list, along the way back, reverse the list.
-This assumes that locks are already held."
+This assumes that locks are already held.  When the `current' version is found,
+it makes the decission to either copy it and return that copy along with the
+value of the largest access-count, or return NIL."
   (if (not (vo-cdr v-obj))
-      (vo-car v-obj)
+      (cond ((or force-copy
+                 (and (eql :edit-length (vo-tree-splitting-method v-obj))
+                      (vo-copy-fn v-obj) (vo-copy-cost-fn v-obj)
+                      (< (funcall (vo-copy-cost-fn v-obj) (vo-car v-obj))
+                         cost )))
+             ;; New locks
+             (let ((new-data-structure (funcall (vo-copy-fn v-obj) (vo-car v-obj)))
+                   (new-locks (cons (list (bt:make-lock "left"))
+                                    (list (bt:make-lock "right")) )))
+               (setf (cdr (vo-lock v-obj)) new-locks)
+               (setf (vo-lock v-obj) (car new-locks))
+               (values new-data-structure
+                       largest-access-count
+                       (cdr new-locks) )))
+            (t ; Don't copy
+             (values nil nil nil) ))
       (destructuring-bind (new-val getter setter)
           (vo-car v-obj)
-        (let ((ret (raise-object! (vo-cdr v-obj) (1+ cost))))
-          ;; Choose the shorter lock list
-          (setf (vo-lock v-obj)
-                (if (< (length (collect-locks (vo-lock v-obj)))
-                       (length (collect-locks (vo-lock (vo-cdr v-obj)))) )
-                    (vo-lock v-obj)
-                    (vo-lock (vo-cdr v-obj)) ))
-          ;; Move the object
-          (setf (vo-car v-obj)
-                (vo-car (vo-cdr v-obj)) )
-          ;; Invert delta
-          (setf (vo-car (vo-cdr v-obj))
-                (list (funcall getter)
-                      getter setter ))
-          ;; Mutate object
-          (funcall setter new-val)
-          ;; Reverse the list
-          (setf (vo-cdr (vo-cdr v-obj))
-                v-obj )
-          ;; Terminate the list
-          (setf (vo-cdr v-obj) nil)
-          ret ))))
+        (multiple-value-bind (ret largest-count new-lock)
+            (raise-object! (vo-cdr v-obj) (1+ cost)
+                           (max largest-access-count
+                                (vo-access-count v-obj) )
+                           force-copy )
+          (cond ((and ret (= largest-count (vo-access-count v-obj)))
+                 ;;; Perform the split
+                 ;; Move the object
+                 (setf (vo-car v-obj) ret)
+                 ;; Mutate object
+                 (funcall setter new-val ret)
+                 ;; New locks
+                 (setf (vo-lock v-obj) new-lock)
+                 ;; Terminate the list
+                 (setf (vo-cdr v-obj) nil)
+                 (values nil nil) )
+                (t
+                 ;; Increment the access counter
+                 (incf (vo-access-count v-obj))
+                 ;; Choose the shorter lock list
+                 (setf (vo-lock v-obj)
+                       (if (< (length (collect-locks (vo-lock v-obj)))
+                              (length (collect-locks (vo-lock (vo-cdr v-obj)))) )
+                           (vo-lock v-obj)
+                           (vo-lock (vo-cdr v-obj)) ))
+                 (cond (ret
+                        ;; Mutate object
+                        (funcall setter new-val ret)
+                        ;; Pass the values to the next level
+                        (values ret largest-count new-lock) )
+                       (t
+                        ;; Move the object
+                        (setf (vo-car v-obj)
+                              (vo-car (vo-cdr v-obj)) )
+                        ;; Invert delta
+                        (setf (vo-car (vo-cdr v-obj))
+                              (list (funcall getter (vo-car v-obj))
+                                    getter setter ))
+                        ;; Mutate object
+                        (funcall setter new-val (vo-car v-obj))
+                        ;; Reverse the list
+                        (setf (vo-cdr (vo-cdr v-obj))
+                              v-obj )
+                        ;; Terminate the list
+                        (setf (vo-cdr v-obj) nil)
+                        (values nil nil nil) ))))))))
 
 
 ;; @The macro <<vmodf>> acts as the main entry point.  It has the same syntax as
@@ -220,22 +266,24 @@ pairs."
                 (with-rebase-locks (vo-lock ,container)
                   (raise-object! ,container)
                   (let* ((,container-sym (vo-car ,v-obj))
-                         (getter (lambda ()
+                         (getter (lambda (,container-sym)
                                    (let ((,container ,container-sym))
                                      ,place )))
-                         (setter (lambda (new-val)
+                         (setter (lambda (new-val ,container-sym)
                                    (let ((,container ,container-sym))
                                      (setf ,place new-val) )))
                          ;; Grab the old value
-                         (old-value (funcall getter))
+                         (old-value (funcall getter (vo-car ,v-obj)))
                          (delta (list old-value getter setter)) )
                     ;; Set the new value
-                    (funcall setter ,val-sym)
+                    (funcall setter ,val-sym (vo-car ,v-obj))
                     ;; Make a new versioned object with the change
-                    (setf (vo-cdr ,v-obj) (%make-versioned-object
-                                           :car ,container-sym
-                                           :cdr nil
-                                           :lock (vo-lock ,v-obj) )
+                    (setf (vo-cdr ,v-obj)
+                          (let ((new-version
+                                  (copy-structure ,v-obj) ))
+                            (setf (vo-car new-version)
+                                  ,container-sym )
+                            new-version )
                           (vo-car ,v-obj) delta )
                     ;; return that new object
                     (vo-cdr ,v-obj) ))))
