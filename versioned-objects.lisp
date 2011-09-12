@@ -10,16 +10,6 @@
 
 (in-package :versioned-objects)
 
-;; (defmacro cond-lock-held (&rest lock-clauses)
-;;   (if (car lock-clauses)
-;;       `(if (bt:acquire-lock ,(caar lock-clauses) nil)
-;;            (unwind-protect
-;;                 (progn ,@(cdar lock-clauses))
-;;              (bt:release-lock ,(caar lock-clauses)) )
-;;            (cond-lock-held ,(cdr lock-clauses)) )))
-
-;; (cond-lock-held (*modifier-lock* t)
-;;                 (*read-only-lock* t) )
 
 ;; @\section{introduction}
 
