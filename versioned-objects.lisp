@@ -215,7 +215,7 @@ pairs."
       `(let* ((,val-sym ,value)
               (,v-obj ,container)
               (,new-version
-                (with-rebase-locks ((vo-lock ,container))
+                (with-rebase-locks (vo-lock ,container)
                   (raise-object! ,container)
                   (let* ((,container-sym (vo-car ,v-obj))
                          (getter (lambda ()
@@ -288,7 +288,7 @@ list."
 
 ;;<<>>=
 (defmacro with-versioned-object (object &body body)
-  `(with-rebase-locks ((vo-lock ,object))
+  `(with-rebase-locks (vo-lock ,object)
      (raise-object! ,object)
      (let ((,object (vo-car ,object)))
        ,@body )))
