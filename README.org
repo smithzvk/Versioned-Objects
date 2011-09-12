@@ -5,18 +5,20 @@ The is an extension of the idea of versioned arrays where any object that holds
 data can be versioned.  This provides a reasonably cheap method of storing
 objects without many differences between them.
 
-** Where can it be used?
+** What does it do?
 
-Basically it allows you to modify parts of a "versioned object," which is a
-small wrapper around a Lisp object, and the resultant modified object and the
-original object only requires /O(N+m)/ storage where /N/ is the number of
-elements in the object and /m/ is the number of edits that are made in between
-the two versions.  It works very well for problems where you are interested in a
-set of objects that are only a few edits apart.  In fact in this case, the
-asymptotic behavior is constant time, just like with normal mutable objects.
+Basically it allows you to treat any object in Common Lisp that can be mutated
+as an immutable object while only requiring /O(N+m)/ space to store it and
+/O(m)/ work to make the copy (where /N/ is the size of the object and /m/ is the
+number of edits differentiating the two objects).  It accomplishes this by
+wrapping the object in a structure and storing one object and a versioning tree
+of all of the edits connecting the various versions.  It works very well for
+problems where you are interested in a set of objects that are only a few edits
+apart.  In fact, in this particular case, the asymptotic behavior is constant
+time, just like with normal mutable objects.
 
 Objects are created normally and converted to versioned objects using the
-function =version=.  Once an object has been versioned, it has essentially been
+function =version=.  Once an object has been "versioned," it has essentially been
 converted into a immutable data type with reasonable asymptotic access and
 modification behavior.  To access data within your versioned object, use the
 functions =vfuncall= and =vapply= with the ordinary accessor function you would
@@ -27,8 +29,8 @@ use.  New versions are made via the =vmodf= macro, which behaves much like the
 
 You may have noticed that this library has a lot in common with Modf.  That is
 because they are used to solve the same problem but for different limits of that
-problem.  Modf is good for objects that can be modified with little copying (be
-they small or share structure with other versions).  Think lists, binary trees,
+problem.  Modf is good for objects that can be modified with little copying, be
+they small or share structure with other versions.  Think lists, binary trees,
 small arrays (less than 30 elements or so, depends on the implementation).
 Versioned-objects is useful for objects that are expensive to copy.  Think
 arrays or hash tables with thousands to millions of elements/keys.
@@ -36,21 +38,21 @@ arrays or hash tables with thousands to millions of elements/keys.
 ** Where does this work?
 
 The functionality in Versioned-Objects is rather straight forward and
-implemented in portable Common Lisp apart from the multi-threading stuff.  No
-MOP tricks or heuristics are needed.  I dare say that if you have an ANSI
+implemented in portable Common Lisp apart from the multi-threading stuff (which
+thanks to Bordeaux-Threads, should seamlessly go away on threadless install).
+No MOP tricks or heuristics are needed.  I dare say that if you have an ANSI
 compliant Lisp, this should work.  Even if you don't, it might.
 
-I test (mostly successfully) in SBCL, CMUCL, CCL, ECL, CLISP, and ABCL, although
-there seem to be intermittent failures in CMUCL and ECL and I am clueless as to
-why.
+I test regularly (and mostly successfully) in SBCL, CMUCL, CCL, ECL, CLISP, and
+ABCL.
 
 ** Efficiency
 
 This library is asymptotically quite efficient (if you are using it for the
-right purpose) and reasonably efficient in practice.  Some un-scientific and
-anecdotal benchmarks suggest that a backtracking algorithm written using this is
-a factor of ~15 or so slower than a similar algorithm written in a destructive
-manner.
+right purpose) and "okay" in practice.  Some un-scientific and anecdotal
+benchmarks suggest that a backtracking algorithm written using this is a factor
+of ~15 or so slower than a similar algorithm written in a destructive manner.
+This is on par with the performance of functional data structures.
 
 There are some plans to speed things up for specific data types like arrays and
 hash tables.  Also, I'm looking into speeding things up when you are trying to
@@ -63,17 +65,21 @@ Lisp array and insist on using it in a functional way.
 ** Thread safety
 
 This library involves mutation and thus "thread safety" and general contention
-for data access between all versions of the data, even within the same thread,
-is a concern.  Some work has been done ensuring that you won't have a deadlock
-situation, but more work needs to be done.
+for data access between all versions of the data is a concern.  In fact, due to
+the odd nature of what we are doing (i.e. allowing the user to access the data
+using standard Lisp functions as opposed to special "versioned" accessor
+function), there is actually contention of the versioned object within a single
+thread due to the fact that the thread might want to access different versions
+at the same time.  Some work has been done ensuring that you won't have a
+deadlock situation, but more work needs to be done.
 
 ** Ugh, something went horribly wrong!
 
 Okay, calm down, we'll get through this.  This library is tricky to debug.  The
 very first thing to do is set =versioned-objects::*versioned-object-printer*= to
 =nil=.  That way introspection won't actually modify your objects, thereby
-removing or introducing new bugs.  Then you might place traces on =vfuncall= and
-=vapply=.
+removing or introducing new bugs.  Then you might place traces on =vfuncall=,
+=vapply= and =versioned-objects::raise-object!=.
 
 ** Installation
 
