@@ -11,6 +11,8 @@
 
 (in-package :versioned-objects)
 
+(defvar *inefficiency-warnings* t
+  "Display warnings when inefficient usage is detected." )
 
 ;; @\section{introduction}
 
