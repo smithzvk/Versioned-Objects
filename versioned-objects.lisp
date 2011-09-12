@@ -177,28 +177,35 @@
 ;; This involves a lot of mutation and thus a lock is held.
 
 ;;<<>>=
-(defun raise-object! (v-obj)
+(defun raise-object! (v-obj &optional (cost 0))
   "Bubble object to beginning of list, along the way back, reverse the list.
 This assumes that locks are already held."
   (if (not (vo-cdr v-obj))
-      nil ; This value is ignored
+      (vo-car v-obj)
       (destructuring-bind (new-val getter setter)
           (vo-car v-obj)
-        (raise-object! (vo-cdr v-obj))
-        ;; Move the object
-        (setf (vo-car v-obj)
-              (vo-car (vo-cdr v-obj)) )
-        ;; Invert delta
-        (setf (vo-car (vo-cdr v-obj))
-              (list (funcall getter)
-                    getter setter ))
-        ;; Mutate object
-        (funcall setter new-val)
-        ;; Reverse the list
-        (setf (vo-cdr (vo-cdr v-obj))
-              v-obj )
-        ;; Terminate the list
-        (setf (vo-cdr v-obj) nil) )))
+        (let ((ret (raise-object! (vo-cdr v-obj) (1+ cost))))
+          ;; Choose the shorter lock list
+          (setf (vo-lock v-obj)
+                (if (< (length (collect-locks (vo-lock v-obj)))
+                       (length (collect-locks (vo-lock (vo-cdr v-obj)))) )
+                    (vo-lock v-obj)
+                    (vo-lock (vo-cdr v-obj)) ))
+          ;; Move the object
+          (setf (vo-car v-obj)
+                (vo-car (vo-cdr v-obj)) )
+          ;; Invert delta
+          (setf (vo-car (vo-cdr v-obj))
+                (list (funcall getter)
+                      getter setter ))
+          ;; Mutate object
+          (funcall setter new-val)
+          ;; Reverse the list
+          (setf (vo-cdr (vo-cdr v-obj))
+                v-obj )
+          ;; Terminate the list
+          (setf (vo-cdr v-obj) nil)
+          ret ))))
 
 
 ;; @The macro <<vmodf>> acts as the main entry point.  It has the same syntax as
