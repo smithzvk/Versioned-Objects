@@ -5,6 +5,7 @@
   (:export #:version
            #:versioned-object
            #:vfuncall #:vapply
+           #:vaccess
            #:with-versioned-object #:with-versioned-objects
            #:vmodf ))
 
@@ -300,6 +301,40 @@ list."
            ,@body ))
       `(progn ,@body) ))
 
+;; @So slight issue here.  While using <<vfuncall>> and <<vapply>> are well
+;; defined, their usage is clumsy and annoying for nested structures.  They
+;; require a lot of <<compose>> and <<curry>> function calls to get at the piece
+;; you want.  The ideal situation would be:
+
+;; (car (aref (cdr arr) 2))
+;; => (vfuncall (compose #'car (rcurry #'aref 2) #'cdr) arr)
+;; or
+;; => (vfuncall (lambda (x) (car (aref (cdr x) 2))) arr)
+;; or
+;; => (with-versioned-object arr
+;;      (car (aref (cdr arr))) )
+
+;; The former two could be done by translating <<vfuncall>> and <<vapply>> into
+;; a macro (less than ideal), the last is basically what with-versioned-object
+;; is for.  Things get more complicated if we try this:
+
+;; (car (aref (cdr arr1) (aref (cdr arr2) 0)))
+;; => (vfuncall (lambda (x) (car (aref (cdr x) (vfuncall (lambda (y) (aref (cdr x) 0)) arr2))))
+;;              arr1 )
+
+;; This doesn't work if {\em arr1} and {\em arr2} are different versions of the
+;; same array.  But that's another issue, I suppose.  Let's just say there is
+;; some room for improvement, I'm just not sure how.
+
+;;<<>>=
+(defmacro vaccess (form)
+  "The macro vaccess provides a slightly less annoying way to access a value
+from a versioned-object.  It is really just a shorthand for
+WITH-VERSIONED-OBJECT(S)."
+  (let ((cont-sym (find-container form)))
+    `(with-versioned-object ,cont-sym
+       ,form )))
+
 ;; @\section{Printing}
 
 ;; @The printing method needs to make the specified version current, then it
@@ -377,11 +412,6 @@ the data structure." )
 ;; @We must evaluate all the other arguments prior to the argument that contains
 ;; the versioned object.  These arguments might include other references to
 ;; other versions of the same object.
-
-;; (defmacro version-access (form)
-;;   (let ((cont-sym (find-container form)))
-;;     `(with-versioned-object ,cont-sym
-;;        ,form )))
 
 ;; @\subsection{On copy functions}
 
