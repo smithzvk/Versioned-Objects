@@ -7,6 +7,7 @@
   "This library implements 'thin' versioned objects.  Basically these are 'thin'
 versioned arrays generalized to any Common Lisp object.  This should work
 functionally modifying any slot of any object that has a setf expansion."
-  :components ((:file "versioned-objects"))
+  :components ((:file "versioned-objects")
+               (:file "benchmarking") )
   :serial t
   :depends-on (:bordeaux-threads :modf) )
