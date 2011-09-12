@@ -92,6 +92,29 @@
 ;; <<versioned-object>> structure if it is not already a versioned object.  This
 ;; means that it is not possible to version the <<versioned-object>> structure.
 
+(defun collect-locks (lock-structures)
+  (cons (car lock-structures)
+        (when (cdr lock-structures)
+          (append (collect-locks (cadr lock-structures))
+                  (collect-locks (cddr lock-structures)) ))))
+
+(defmacro with-rebase-locks (locks &body body)
+  `(with-locks (collect-locks ,locks)
+     ,@body ))
+
+(defmacro with-locks (locks &body body)
+  (let ((held-locks (gensym)))
+    `(let ((,held-locks nil))
+       (unwind-protect
+            (progn (iter (for lock in ,locks)
+                     (bt:acquire-lock lock)
+                     (push lock ,held-locks) )
+                   ,@body )
+         (iter (for lock in ,held-locks)
+           (handler-case (bt:release-lock lock)
+             (error ()
+               (warn "Error while releasing lock ~A" lock) )))))))
+
 ;;<<>>=
 (defun version (object
                 &key (rebase :on-access)
@@ -104,7 +127,7 @@
   (if (versioned-object-p object)
       object
       (%make-versioned-object :car object
-                              :lock (bt:make-lock) )))
+                              :lock (cons (bt:make-lock) nil) )))
 
 ;; @\subsection{Advanced control of the versioning of objects}
 
@@ -194,7 +217,7 @@ pairs."
       `(let* ((,val-sym ,value)
               (,v-obj ,container)
               (,new-version
-                (bt:with-lock-held ((vo-lock ,container))
+                (with-rebase-locks ((vo-lock ,container))
                   (raise-object! ,container)
                   (let* ((,container-sym (vo-car ,v-obj))
                          (getter (lambda ()
@@ -235,20 +258,17 @@ pairs."
   "Like FUNCALL except you can use versioned structures.  Call the function
 specified by the first argument with the rest of the arguments as its argument
 list."
-  (let ((held-locks))
-    (unwind-protect
-         (let ((new-args
-                 (iter (for arg in (cons fn args))
-                   (collecting
-                    (cond ((versioned-object-p arg)
-                           (bt:acquire-lock (vo-lock arg))
-                           (push (vo-lock arg) held-locks)
-                           (raise-object! arg)
-                           (vo-car arg) )
-                          (t arg) )))))
-           (apply #'funcall new-args) )
-      (iter (for lock in held-locks)
-        (bt:release-lock lock) ))))
+  (with-locks (iter (for arg in (cons fn args))
+                (when (versioned-object-p arg)
+                  (appending (collect-locks (vo-lock arg))) ))
+    (let ((new-args
+            (iter (for arg in (cons fn args))
+              (collecting
+               (cond ((versioned-object-p arg)
+                      (raise-object! arg)
+                      (vo-car arg) )
+                     (t arg) )))))
+      (apply #'funcall new-args) )))
 
 (defun vapply (fn &rest args)
   (apply #'vfuncall fn (apply #'list* args)) )
@@ -270,7 +290,7 @@ list."
 
 ;;<<>>=
 (defmacro with-versioned-object (object &body body)
-  `(bt:with-lock-held ((vo-lock ,object))
+  `(with-rebase-locks ((vo-lock ,object))
      (raise-object! ,object)
      (let ((,object (vo-car ,object)))
        ,@body )))
