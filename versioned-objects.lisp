@@ -263,32 +263,24 @@ pairs."
       `(let* ((,val-sym ,value)
               (,v-obj ,container)
               (,new-version
-                (with-rebase-locks (vo-lock ,container)
-                  (raise-object! ,container)
-                  (let* ((,container-sym (vo-car ,v-obj))
-                         (getter (lambda (,container-sym)
-                                   (let ((,container ,container-sym))
-                                     ,place )))
-                         (setter (lambda (new-val ,container-sym)
-                                   (let ((,container ,container-sym))
-                                     (setf ,place new-val) )))
-                         ;; Grab the old value
-                         (old-value (funcall getter (vo-car ,v-obj)))
-                         (delta (list old-value getter setter)) )
-                    ;; Set the new value
-                    (funcall setter ,val-sym (vo-car ,v-obj))
-                    ;; Make a new versioned object with the change
-                    (setf (vo-cdr ,v-obj)
-                          (let ((new-version
-                                  (copy-structure ,v-obj) ))
-                            (setf (vo-car new-version)
-                                  ,container-sym )
-                            new-version )
-                          (vo-car ,v-obj) delta )
-                    ;; return that new object
-                    (vo-cdr ,v-obj) ))))
-         ,(if more `(let ((,(first more) ,new-version))
-                      (vmodf ,@(cdr more)) )
+                (let* ((getter (lambda (,container-sym)
+                                 (let ((,container ,container-sym))
+                                   ,place )))
+                       (setter (lambda (new-val ,container-sym)
+                                 (let ((,container ,container-sym))
+                                   (setf ,place new-val) )))
+                       (delta (list ,val-sym getter setter)) )
+                  (let ((new (copy-structure ,v-obj)))
+                    (setf (vo-car new) delta
+                          (vo-cdr new) ,v-obj )
+                    new ))))
+         (when (or (eql :on-access (vo-rebase ,v-obj))
+                   (eql :on-modification (vo-rebase ,v-obj)) )
+           (with-rebase-locks (vo-lock ,new-version)
+             (raise-object! ,new-version) ))
+         ,(if more
+              `(let ((,(first more) ,new-version))
+                 (vmodf ,@(cdr more)) )
               new-version )))))
 
 ;; @\section{Accessing data in a versioned object}
