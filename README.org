@@ -7,7 +7,7 @@ objects without many differences between them.
 
 ** What does it do?
 
-Basically it allows you to treat any object in Common Lisp that can be mutated
+Basically, it allows you to treat any object in Common Lisp that can be mutated
 as an immutable object while only requiring /O(N+m)/ space to store it and
 /O(m)/ work to make the copy (where /N/ is the size of the object and /m/ is the
 number of edits differentiating the two objects).  It accomplishes this by
@@ -18,12 +18,17 @@ apart.  In fact, in this particular case, the asymptotic behavior is constant
 time, just like with normal mutable objects.
 
 Objects are created normally and converted to versioned objects using the
-function =version=.  Once an object has been "versioned," it has essentially been
-converted into a immutable data type with reasonable asymptotic access and
-modification behavior.  To access data within your versioned object, use the
-functions =vfuncall= and =vapply= with the ordinary accessor function you would
-use.  New versions are made via the =vmodf= macro, which behaves much like the
-=modf= macro from the Modf library, which in turn is based on the =setf= macro.
+function =version=.  This function takes several optional arguments which allows
+you to tweak how the version tree is maintained.  Once an object has been
+"versioned," it has essentially been converted into a immutable data type with
+reasonable asymptotic access and modification behavior.  To access data within
+your versioned object, use the macro =vaccess= to convert ordinary Lisp forms
+used to access the data into their versioned equivalents, the functions
+=vfuncall= and =vapply= with the ordinary accessor function you would use, or
+the macros =with-versioned-object= and =with-versioned-objects= when nothing
+else will do.  New versions are made via the =vmodf= macro, which behaves much
+like the =modf= macro from the Modf library, which in turn is based on the
+=setf= macro.
 
 ** Where does this fit in?
 
@@ -43,8 +48,7 @@ thanks to Bordeaux-Threads, should seamlessly go away on threadless install).
 No MOP tricks or heuristics are needed.  I dare say that if you have an ANSI
 compliant Lisp, this should work.  Even if you don't, it might.
 
-I test regularly (and mostly successfully) in SBCL, CMUCL, CCL, ECL, CLISP, and
-ABCL.
+I test regularly and successfully on SBCL, CMUCL, CCL, ECL, CLISP, and ABCL.
 
 ** Efficiency
 
@@ -52,15 +56,18 @@ This library is asymptotically quite efficient (if you are using it for the
 right purpose) and "okay" in practice.  Some un-scientific and anecdotal
 benchmarks suggest that a backtracking algorithm written using this is a factor
 of ~15 or so slower than a similar algorithm written in a destructive manner.
-This is on par with the performance of functional data structures.
+This is on par with the performance of functional data structures.  Keep in
+mind, however, that these versioned data structures don't have the benefit
+functional structures have when it comes to multithreaded programming.
 
 There are some plans to speed things up for specific data types like arrays and
 hash tables.  Also, I'm looking into speeding things up when you are trying to
 use it with objects with many edits separating them.
 
-Keep in mind that this kicks the pants off actually copying your data, which is
-the other option if you insist on using a mutation only data structure like a
-Lisp array and insist on using it in a functional way.
+Also, keep in mind that this kicks the pants off actually copying your data if
+your data is large.  Copying is the only other option if you insist on using a
+mutation only data structure like a Lisp array or hash table and insist on using
+it in a functional way.
 
 ** Thread safety
 
@@ -75,11 +82,13 @@ deadlock situation, but more work needs to be done.
 
 ** Ugh, something went horribly wrong!
 
-Okay, calm down, we'll get through this.  This library is tricky to debug.  The
-very first thing to do is set =versioned-objects::*versioned-object-printer*= to
-=nil=.  That way introspection won't actually modify your objects, thereby
-removing or introducing new bugs.  Then you might place traces on =vfuncall=,
-=vapply= and =versioned-objects::raise-object!=.
+Okay, calm down, we'll get through this.  This library is tricky to debug.  It
+is notorious for producing [[https://secure.wikimedia.org/wikipedia/en/wiki/Unusual_software_bug#Heisenbug][Heisenbugs]], in fact this is part of its core
+functionality.  The very first thing to do is set
+=versioned-objects::*versioned-object-printer*= to =nil=.  That way
+introspection won't actually modify your objects, thereby removing or
+introducing new bugs.  Then you might place traces on =vfuncall=, =vapply=, and
+maybe =versioned-objects::raise-object!=.
 
 ** Installation
 
@@ -91,6 +100,7 @@ Not many dependencies, yay:
 
  1. bordeaux-threads
  2. Modf
+ 3. Iterate
 
 Additional dependencies for the test suite:
 
