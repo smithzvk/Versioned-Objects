@@ -82,6 +82,13 @@ deadlock situation, but more work needs to be done.
 
 ** Ugh, something went horribly wrong!
 
+Okay, calm down, we'll get through this.  This library is tricky to debug.  It
+is notorious for producing [[https://secure.wikimedia.org/wikipedia/en/wiki/Unusual_software_bug#Heisenbug][Heisenbugs]], in fact this is part of its core
+functionality.  The very first thing to do is set
+=versioned-objects::*versioned-object-printer*= to =nil=.  That way
+introspection won't actually modify your objects, thereby removing or
+introducing new bugs.  Then you might place traces on =vfuncall=, =vapply=, and
+maybe =versioned-objects::raise-object!=.
 
 ** Installation
 
