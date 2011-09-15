@@ -80,6 +80,7 @@
 (defstruct (versioned-object (:constructor %make-versioned-object)
                              (:conc-name :vo-) )
   car cdr lock (access-count 0)
+  object-type
   copy-fn copy-cost-fn
   tree-splitting-method
   rebase )
@@ -112,7 +113,8 @@
 
 ;;<<>>=
 (defun version (object
-                &key (rebase :on-access)
+                &key (object-type :shallow)
+                     (rebase :on-access)
                      copy-fn
                      copy-cost-fn
                      match-fn
@@ -121,7 +123,9 @@
   "Convert an object into a versioned object."
   (declare (ignore match-fn read-contention-resolution))
   (%make-versioned-object :car object
+                          :cdr nil
                           :lock (cons (bt:make-lock) nil)
+                          :object-type object-type
                           :copy-fn copy-fn
                           :copy-cost-fn copy-cost-fn
                           :tree-splitting-method tree-splitting-method
@@ -131,6 +135,18 @@
 
 ;; @The optional arguments to the <<version>> function control how the
 ;; versioning is done.
+
+;; @\{\em object-type} determines how the versioning of the object should be
+;; done.  The default value, {\em :shallow}, specifies a useful but safe(ish),
+;; middle ground.  This will allow you to version any object, but only using
+;; shallow access.  This means that you can only access and modify values in
+;; your object using single function calls.  Other options for {\em object-type}
+;; include {\em :array} and {\em :hash-table}.  Another option available to
+;; users who understand the dangers inherent with it, is {\em :arbitrary}.  This
+;; mode allows for the most flexibility but also the most danger (and typically
+;; lowest efficiency).  Make sure you understand the content of the section
+;; titled {\em Versioned objects are tricky} and understand the exercises at the
+;; end before using {\em :arbitrary}.
 
 ;; @{\em rebase} controls whether the object should be made the root of the
 ;; version tree with each operation.  It can have the value {\em :on-access} or
@@ -467,6 +483,37 @@ the data structure." )
 ;; (defparameter *ver1* (vmodf (fourth *obj-orig*) #(x y z)))
 
 ;; (defparameter *ver2* (vmodf (aref (fourth *obj-orig*) 1) t))
+
+;; @First, note that if I grab just the fourth element to play with, some other
+;; version my want to become current and therefore change the value in my
+;; object.  This is a pretty big problem.  What it means is that when we version
+;; an object we have to formally define what objects are accessible (either
+;; readable or settable).  The simplest way to reconcile this is to only allow
+;; objects to be accessed shallowly.  This, more or less, returns us to the
+;; safety I thought we had previously.
+
+;; What does this mean?  Well, it means that <<vmodf>> forms can only have one
+;; accessor in them.
+
+;; We then have a choice, nested expressions either mean that the object
+;; contains atoms and nested versioned objects (safe), or that it contains
+;; nested plain objects (dangerous).
+
+;; ANY PLACE IN A VERSIONED DATA STRUCTURE WHICH IS EVER WRITTEN TO OR READ FROM
+;; NEEDS TO BE EFFECTIVELY TREATED AS PLACE FOR ATOMIC DATA, FOR THE DURATION OF
+;; THE VERSIONED OBJECT.
+
+;; If you access, either by read or write, a particular `place' in a versioned
+;; object, that place should, for the lifetime of the versioned object, be
+;; treated as holding an atomic object.  This means that you should never:
+
+;; mutate a part of an object that has ever been stored in that place in any
+;; version of that versioned object.
+
+;; perform a versioned modification on any part of a place
+
+;; I will allow for this safe behavior to be disabled by the user if they choose
+;; at the time the object is created.
 
 ;; @Both versions work exactly as expected.  However, if we specify a copy
 ;; function that does a shallow copy, i.e. doesn't copy the array in the fourth
