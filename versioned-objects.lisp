@@ -57,19 +57,25 @@
 
 ;; @\subsection{Simple Usage}
 
-;; @Using Versioned-objects is simple.  You take any object and call the function
-;; <<version>> on it.  This will transform the object into a versioned-object.
-;; In general, the object passed to <<version>> should never be accessed or
-;; mutated after calling <<version>>.  At this point you may make cheap copies
-;; that require no more space than the different between the original and the
-;; new copy.  There are a few options you can pass to <<version>> that will
-;; determine how the version tree is maintained, but we'll leave that for later.
+;; @Using Versioned-objects is simple.  You take any object and call the
+;; function <<version>> on it.  This will transform the object into a
+;; versioned-object, and immutable object (well, one that shouldn't be mutated).
+;; At this point you may make cheap copies that require no more space than the
+;; difference between the original and the new copy.  There are a few options
+;; you can pass to <<version>> that will determine how the version tree is
+;; maintained, but we'll leave that for later.
 
 ;; @To access the data in your versioned-object, you must use the functions
 ;; <<vfuncall>> and <<vapply>> which work precisely as their {\em sans v}
-;; counterparts, but work with versioned data in their argument lists.  Later on
-;; we will see how to define your own accessor functions which may be faster and
-;; possibly more aesthetically pleasing, but for now we leave it at this.
+;; counterparts but work with versioned data in their argument lists.  To reduce
+;; the number of times you need to write <<vfuncall>>, we provide the macro
+;; <<vaccess>> which inserts <<vfuncall>> symbols into an access form.
+
+;; @However, as simple as this all seems, any user of Versioned-Objects should
+;; take the time to understand the issues outlined in the section \ref{tricky},
+;; {\em Versioned Objects are Tricky}.  Versioned-Objects aren't quite as fool
+;; proof as I'd like and it seems as though they will stay that way for the
+;; foreseeable future.
 
 ;; @\section{Implementation}
 
@@ -88,16 +94,19 @@
 ;; @The function <<version>> takes an object and wraps it in a
 ;; <<versioned-object>> structure.
 
+;;<<>>=
 (defun collect-locks (lock-structures)
   (cons (car lock-structures)
         (when (cdr lock-structures)
           (append (collect-locks (cadr lock-structures))
                   (collect-locks (cddr lock-structures)) ))))
 
+;;<<>>=
 (defmacro with-rebase-locks (locks &body body)
   `(with-locks (collect-locks ,locks)
      ,@body ))
 
+;;<<>>=
 (defmacro with-locks (locks &body body)
   (let ((held-locks (gensym)))
     `(let ((,held-locks nil))
@@ -113,7 +122,7 @@
 
 ;;<<>>=
 (defun version (object
-                &key (object-type :shallow)
+                &key (object-type t)
                      (rebase :on-access)
                      copy-fn
                      copy-cost-fn
@@ -136,17 +145,22 @@
 ;; @The optional arguments to the <<version>> function control how the
 ;; versioning is done.
 
-;; @\{\em object-type} determines how the versioning of the object should be
-;; done.  The default value, {\em :shallow}, specifies a useful but safe(ish),
-;; middle ground.  This will allow you to version any object, but only using
-;; shallow access.  This means that you can only access and modify values in
-;; your object using single function calls.  Other options for {\em object-type}
-;; include {\em :array} and {\em :hash-table}.  Another option available to
-;; users who understand the dangers inherent with it, is {\em :arbitrary}.  This
-;; mode allows for the most flexibility but also the most danger (and typically
-;; lowest efficiency).  Make sure you understand the content of the section
-;; titled {\em Versioned objects are tricky} and understand the exercises at the
-;; end before using {\em :arbitrary}.
+;; {\em object-type} is ignored for now and may be removed later.
+
+;; % @\{\em type} determines how the versioning of the object should be done.
+;; % Specifying a type here informs versioned objects that the object you are
+;; % sending it is of a particular type and it may use certain
+
+;; % The default value, {\em :shallow}, specifies a useful but safe(ish),
+;; % middle ground.  This will allow you to version any object, but only using
+;; % shallow access.  This means that you can only access and modify values in
+;; % your object using single function calls.  Other options for {\em object-type}
+;; % include {\em :array} and {\em :hash-table}.  Another option available to
+;; % users who understand the dangers inherent with it, is {\em :arbitrary}.  This
+;; % mode allows for the most flexibility but also the most danger (and typically
+;; % lowest efficiency).  Make sure you understand the content of the section
+;; % titled {\em Versioned objects are tricky} and understand the exercises at the
+;; % end before using {\em :arbitrary}.
 
 ;; @{\em rebase} controls whether the object should be made the root of the
 ;; version tree with each operation.  It can have the value {\em :on-access} or
@@ -419,14 +433,21 @@ the data structure." )
 ;; particularly dangerous here because even reads require locking the data which
 ;; most people take to be a non-locking operation.
 
-;; @\section{Random Thoughts}
+;; @\section{Specialized versioned object types}
 
-;; @We provide special treatment for arrays, hash tables, classes, and
-;; structures.  Other objects can either have special functions defined for
-;; them, or then can use the general interface which is slower and perhaps more
-;; prone to failure (we'll see).
+;; @The general interface is quite robust, but perhaps less efficient than we
+;; would want.  After all, the general interface involves holding closures which
+;; might be considerable bigger than an edit needs to be.  Some results suggest
+;; that a specialized interface for arrays (for instance) could be around a
+;; factor of two faster than the generic interface.  We intent to provide
+;; special treatment for arrays, hash tables, classes, and structures.  We might
+;; make a user interface for defining new specialized object interfaces or we
+;; might just let them use the generic interface.  We haven't decided yet.
 
-;; @\subsection{Why not implement it as a generalization of Modf?}
+;; @\section{Why not implement it as a generalization of Modf?}
+
+;; @This section is a bit outdated as I am considering making this an extension
+;; of Modf using Modf's new extensibility features.
 
 ;; @While this could, in principle, be done, it is important to note that
 ;; Versioned-objects breaks the basic assumptions that make Modf work.  This is
@@ -443,19 +464,87 @@ the data structure." )
 ;; single generalized Modf statement in any syntax I can think of.
 
 
-;; @\subsection{Versioned objects are tricky}
+;; @\section{Versioned Objects are Tricky}
 
-;; @Take, for instance, the expression:
+;; \label{tricky}
 
-;; (let* ((arr1 (version (make-array '(10) :initial-element 0)))
-;;        (arr2 (vmodf (aref arr1 0) 5)) )
-;;   (aref arr1 (aref arr2 0)) )
+;; @\subsection{The immutable issue}
 
-;; @It is impossible to retrofit <<compare-arrays>> as a function that can use
-;; versioned data.  This is because the access happens within the function,
-;; completely out of our control.  Thus {\em arr1} and {\em arr2} must be Lisp
-;; arrays yet they refer to the same array.  In such a case, it seems that a
-;; copy is the only way to deal with this.
+;; In general, the object passed to <<version>> should never be accessed or
+;; mutated after calling <<version>>.  You can't do this:
+
+;; In a much more concerning case, any data that is handled by versioned
+;; objects, either by modifying a place using <<vmodf>> or reading a place,
+;; needs be treated as a constant object.  Constant means not only immutation,
+;; but also that it should not be modified using the versioning apparatus using
+;; <<vmodf>>.  This is a subtle issue and thus I will attempt to demonstrate how
+;; this can bite you.
+
+;; To illustrate the issues involved here, we will be versioning lists.  I use
+;; lists because their shared structure and the functions commonly used to
+;; access data in lists provide an excellent example of how Versioned-Objects
+;; can subtly produce errors.  Keep in mind, however, that there is never a good
+;; reason to use this versioning system on lists as it will always have poorer
+;; performance actually building new lists.
+
+;; (defvar *test1* (version '(1 2 3 4)))
+;; (defvar *test2* (vmodf (second *test1*) t))
+
+;; (defvar *rest-test1* (vaccess (cdr *test1*)))
+
+;; The symbols <<*test1*>> and <<*test2*>> are seemingly valid versions of the
+;; data.  However, we accessed the <<cdr>> of <<*test1*>> (stored in
+;; <<*rest-test1*>> meaning we have to treat <<cdr>> of the list as a constant
+;; object which cannot be mutated or modified using versioning.  But we also
+;; violated that restriction by modfying the second value in <<*test1*>>, which
+;; is the first value in <<*rest-test1*>>.
+
+;; Still don't see how something like this is going to cause trouble?  Try this
+;; on:
+
+;; (print *test1*) => #<Versioned: '(1 2 3 4)
+;; (print *rest-test1*) => '(2 3 4)
+;; (print *test2*) => #<Versioned: '(1 t 3 4)
+;; (print *rest-test1*) => '(t 3 4)
+
+;; By violating this rule, we have turned our Lisp system into a land where data
+;; can magically change under our noses.  Things get much worse when we consider
+;; that other threads could be accessing versioned data and, therefore,
+;; modifying data with no warning what-so-ever.
+
+;; It would be nice if we could provide some kind of safe-guards or checking
+;; that would protect new users from this kind of issue.  However, I think this
+;; is impossible at compile time, expensive at runtime, and quite possibly
+;; impossible to ever do with any generality.  So, I am leaving this in an
+;; unsafe state.  As long as you follow the rules, you will be okay.  If you
+;; don't, I guarantee something will go wrong eventually.
+
+;; @\subsection{The locking issue}
+
+;; @While these issues are still important, we have found ways to circumvent
+;; most (all) serious issues associated with this.  Despite this, not
+;; understanding the concepts outlined in this section can lead you to write
+;; code with poor performance, so take some time to understand the simple
+;; concepts.
+
+;; @The crux of the matter is this, it is impossible to use versioned objects
+;; with a <<compare-arrays>> function when using the naive versioning apparatus.
+;; This is because the arrays that would be given as arguments might be two
+;; different versions from the same version tree, meaning that both locks cannot
+;; be held at the same time.  When writting Versioned-Objects we chose to use
+;; the native Lisp features whenever possible, meaning that we convert versioned
+;; objects into ordinary Lisp objects and then send them to ordinary Lisp
+;; functions.  If we didn't do this, we would have to write special
+;; versioned-object versions of every function we would ever want to use.  This
+;; has been a success as Versioned-Objects work very well almost everywhere.
+;; The downside is that we can only have one versioned object converted into a
+;; normal Lisp object at a time from the versioned object tree.  Which means we
+;; can't use a normal Lisp function that compares two arrays element by element.
+
+;; We can, however, use more advanced features such as contention resolution
+;; where we perform a forced tree split if such a contentious case is realized.
+;; This means that your code won't hit an error, but it will hit a performance
+;; loss.  For this reason, it is important to keep this issue in might.
 
 ;; (defun compare-arrays (arr1 arr2)
 ;;   (iter
@@ -465,66 +554,9 @@ the data structure." )
 
 ;; (let* ((arr1 (version (make-array '(10) :initial-element 0)))
 ;;        (arr2 (vmodf (aref arr1 0) 5)) )
-;;   (compare-arrays arr1 arr2) )
+;;   (vfuncall 'compare-arrays arr1 arr2) )
 
-;; @We must evaluate all the other arguments prior to the argument that contains
-;; the versioned object.  These arguments might include other references to
-;; other versions of the same object.
-
-;; @\subsection{On copy functions}
-
-;; @While the basic functionality of this library is easy enough to understand,
-;; it is pretty easy to find cases where the behavior is surprising if not down
-;; right baffling.  These cases actually make sense once you really understand
-;; what is happening.  Take for instance:
-
-;; (defparameter *obj-orig* (version '(1 2 3 #(4 5 6))))
-
-;; (defparameter *ver1* (vmodf (fourth *obj-orig*) #(x y z)))
-
-;; (defparameter *ver2* (vmodf (aref (fourth *obj-orig*) 1) t))
-
-;; @First, note that if I grab just the fourth element to play with, some other
-;; version my want to become current and therefore change the value in my
-;; object.  This is a pretty big problem.  What it means is that when we version
-;; an object we have to formally define what objects are accessible (either
-;; readable or settable).  The simplest way to reconcile this is to only allow
-;; objects to be accessed shallowly.  This, more or less, returns us to the
-;; safety I thought we had previously.
-
-;; What does this mean?  Well, it means that <<vmodf>> forms can only have one
-;; accessor in them.
-
-;; We then have a choice, nested expressions either mean that the object
-;; contains atoms and nested versioned objects (safe), or that it contains
-;; nested plain objects (dangerous).
-
-;; ANY PLACE IN A VERSIONED DATA STRUCTURE WHICH IS EVER WRITTEN TO OR READ FROM
-;; NEEDS TO BE EFFECTIVELY TREATED AS PLACE FOR ATOMIC DATA, FOR THE DURATION OF
-;; THE VERSIONED OBJECT.
-
-;; If you access, either by read or write, a particular `place' in a versioned
-;; object, that place should, for the lifetime of the versioned object, be
-;; treated as holding an atomic object.  This means that you should never:
-
-;; mutate a part of an object that has ever been stored in that place in any
-;; version of that versioned object.
-
-;; perform a versioned modification on any part of a place
-
-;; I will allow for this safe behavior to be disabled by the user if they choose
-;; at the time the object is created.
-
-;; @Both versions work exactly as expected.  However, if we specify a copy
-;; function that does a shallow copy, i.e. doesn't copy the array in the fourth
-;; element, <<*ver2*>> will fail and probably corrupt the entirety of the
-;; version tree.  You must copy everything that you have versioning
-;; modifications on.  A perfect deep copy would be safe, but this would be
-;; inefficient and I'm not even sure possible in Common Lisp.  We would need
-;; assurance that at some level every part of an object is an atomic data type
-;; which is not something Common Lisp guarantees.
-
-;; @\subsection{Tree Splitting}
+;; @\section{Tree Splitting}
 
 ;; As the version tree grows, we expect (and do see) a reduction of access time
 ;; and increase in the in memory size of the object.  The worst case access time
@@ -543,14 +575,14 @@ the data structure." )
 ;; allow the garbage collector to reap many versions with no reference in the
 ;; running program.
 
-;; @\subsubsection{Performance opimization}
+;; @\subsection{Performance opimization}
 
 ;; @While there are other benefits, first and foremost, this library was
 ;; designed to give performance gains over copying large objects.  With this in
 ;; mind many have designed methods of reducing the tree size in order to
 ;; increase performance.
 
-;; @\subsubsubsection{Probablistic copying}
+;; @\subsubsection{Probablistic copying}
 
 ;; @The absolute simplest method of tree size reduction is to split the tree at
 ;; modification time, thereby limiting the size of the tree.  This is typically
@@ -559,7 +591,7 @@ the data structure." )
 ;; to the actual data.  This means that on any given access we might expect an
 ;; additional $O(N)$ cost.
 
-;; @\subsubsubsection{Copy on long edit paths}
+;; @\subsubsection{Copy on long edit paths}
 
 ;; @Since we are walking the edit path in between, we can calculate the length
 ;; and decide whether a copy is appropriate based on comparing that length to
@@ -576,7 +608,7 @@ the data structure." )
 ;; removing it.  This splits the tree in a way that removes the most used path
 ;; in the graph.
 
-;; @\subsubsection{$N$ and cost}
+;; @\subsection{$N$ and cost}
 
 ;; @In the preceding sections, we use the number of edits $m$ and the size of
 ;; the data $N$ as measures of how much work is being done.  This is fine except
@@ -589,7 +621,7 @@ the data structure." )
 ;; with the true cost of accessing and copying data, and traversing and creating
 ;; edits.
 
-;; @\subsubsection{Splitting and Locking}
+;; @\subsection{Splitting and Locking}
 
 ;; @A secondary benefit of splitting version trees is that it reduces the
 ;; overall contention for resources.  By splitting the tree, we can use two
