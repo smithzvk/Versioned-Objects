@@ -85,11 +85,13 @@
 ;;<<versioned-object>>=
 (defstruct (versioned-object (:constructor %make-versioned-object)
                              (:conc-name :vo-) )
-  car cdr lock (access-count 0)
+  car cdr (access-count 0)
   object-type
   copy-fn copy-cost-fn
   tree-splitting-method
-  rebase )
+  rebase
+  contention-resolution
+  rebase-lock )
 
 ;; @The function <<version>> takes an object and wraps it in a
 ;; <<versioned-object>> structure.
@@ -102,19 +104,73 @@
                   (collect-locks (cddr lock-structures)) ))))
 
 ;;<<>>=
-(defmacro with-rebase-locks (locks &body body)
-  `(with-locks (collect-locks ,locks)
-     ,@body ))
+(defmacro with-rebase-locks* ((&rest objects) &body body)
+  (let ((held-locks (gensym))
+        (v-obj (gensym)) )
+    `(let ((,held-locks nil))
+       (unwind-protect
+            (progn
+              (iter (for ,v-obj in ,objects)
+                (iter (for lock in (collect-locks (vo-rebase-lock ,v-obj)))
+                  (handler-case (bt:acquire-lock lock)
+                    (error ()
+                      ;; This is to catch recursive locking attempts
+                      (case (vo-contention-resolution ,v-obj)
+                        (:error
+                         (error
+                          "We are already accessing a version of this structure" ))
+                        (:split-tree
+                         (raise-object! ,v-obj 0 0 t) ))))
+                  (push lock ,held-locks) ))
+              ,@body )
+         (iter (for lock in ,held-locks)
+           (handler-case (bt:release-lock lock)
+             (error ()
+               (warn "Error while releasing lock ~A" lock) )))))))
+
+;;<<>>=
+(defmacro with-rebase-locks ((&rest objects) &body body)
+  (let ((held-locks (gensym))
+        (v-obj (gensym)) )
+    `(let ((,held-locks nil))
+       (unwind-protect
+            (progn
+              (iter (for ,v-obj in ,(cons 'list objects))
+                (iter (for lock in (collect-locks (vo-rebase-lock ,v-obj)))
+                  (handler-case (bt:acquire-lock lock)
+                    (error ()
+                      ;; This is to catch recursive locking attempts
+                      (case (vo-contention-resolution ,v-obj)
+                        (:error
+                         (error
+                          "We are already accessing a version of this structure" ))
+                        (:split-tree
+                         (raise-object! ,v-obj 0 0 t) ))))
+                  (push lock ,held-locks) ))
+              ,@body )
+         (iter (for lock in ,held-locks)
+           (handler-case (bt:release-lock lock)
+             (error ()
+               (warn "Error while releasing lock ~A" lock) )))))))
 
 ;;<<>>=
 (defmacro with-locks (locks &body body)
   (let ((held-locks (gensym)))
     `(let ((,held-locks nil))
        (unwind-protect
-            (progn (iter (for lock in ,locks)
-                     (bt:acquire-lock lock)
-                     (push lock ,held-locks) )
-                   ,@body )
+            (progn
+              (iter (for lock in ,locks)
+                (handler-case (bt:acquire-lock lock)
+                  (error ()
+                    ;; This is to catch recursive locking attempts
+                    (case (vo-contention-resolution lock)
+                      (:error
+                       (error
+                        "We are already accessing a version of this structure" ))
+                      (:split-tree
+                       (raise-object! v-obj 0 0 t) )))) 
+                (push lock ,held-locks) )
+              ,@body )
          (iter (for lock in ,held-locks)
            (handler-case (bt:release-lock lock)
              (error ()
@@ -127,13 +183,13 @@
                      copy-fn
                      copy-cost-fn
                      match-fn
-                     (read-contention-resolution :error)
+                     (contention-resolution :error)
                      (tree-splitting-method :none) )
   "Convert an object into a versioned object."
-  (declare (ignore match-fn read-contention-resolution))
+  (declare (ignore match-fn contention-resolution))
   (%make-versioned-object :car object
                           :cdr nil
-                          :lock (cons (bt:make-lock) nil)
+                          :rebase-lock (cons (bt:make-lock) nil)
                           :object-type object-type
                           :copy-fn copy-fn
                           :copy-cost-fn copy-cost-fn
@@ -331,9 +387,9 @@ pairs."
   "Like FUNCALL except you can use versioned structures.  Call the function
 specified by the first argument with the rest of the arguments as its argument
 list."
-  (with-locks (iter (for arg in (cons fn args))
-                (when (versioned-object-p arg)
-                  (appending (collect-locks (vo-lock arg))) ))
+  (with-rebase-locks* (iter (for arg in (cons fn args))
+                       (when (versioned-object-p arg)
+                         (collect arg) ))
     (let ((new-args
             (iter (for arg in (cons fn args))
               (collecting
@@ -373,18 +429,17 @@ VFUNCALLs."
 
 ;;<<>>=
 (defmacro with-versioned-object (object &body body)
-  `(with-rebase-locks (vo-lock ,object)
+  `(with-rebase-locks (list ,object)
      (raise-object! ,object)
      (let ((,object (vo-car ,object)))
        ,@body )))
 
 ;;<<>>=
 (defmacro with-versioned-objects (objects &body body)
-  (if objects
-      `(with-versioned-object ,(car objects)
-         (with-versioned-objects ,(cdr objects)
-           ,@body ))
-      `(progn ,@body) ))
+  `(with-rebase-locks (list ,@objects)
+     ,@(mapcar (lambda (x) (list 'raise-object! x)) objects)
+     (let (,(mapcar (lambda (x) (list x `(vo-car ,x))) objects))
+       ,@body )))
 
 ;; @\section{Printing}
 
