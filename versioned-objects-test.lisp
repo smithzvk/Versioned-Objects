@@ -21,7 +21,7 @@
   "These are all extremely simple tests for fundamental functionality.  If these
 fail, you probably did something pretty stupid."
   ;; List tests
-  (let ((lst (version '(1 2 3 4))))
+  (let ((lst (version (copy-list '(1 2 3 4)))))
     (is (vfuncall 'equalp (vmodf (second lst) t) '(1 t 3 4)))
     (is (vfuncall 'equalp (vmodf (nth 2 lst) t) '(1 2 t 4)))
     (is (vfuncall 'equalp (vmodf (second lst) t
@@ -86,7 +86,7 @@ fail, you probably did something pretty stupid."
                               (vfuncall 'test-b new-obj)) )))))
 
 (deftest nested-object-tests ()
-  (let ((obj (version '(1 2 3 #(4 5 6)))))
+  (let ((obj (version (list 1 2 3 (make-array '(3) :initial-contents '(4 5 6))))))
     (is (vfuncall 'equalp
                   '(1 2 3 #(4 t 6))
                   (vmodf (aref (nth 3 obj) 1) t)) )
