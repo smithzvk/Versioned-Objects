@@ -269,6 +269,7 @@ This assumes that locks are already held.  When the `current' version is found,
 it makes the decission to either copy it and return that copy along with the
 value of the largest access-count, or return NIL."
   (if (not (vo-cdr v-obj))
+      ;; We are at the true object
       (cond ((or force-copy
                  (and (eql :edit-length (vo-tree-splitting-method v-obj))
                       (vo-copy-fn v-obj) (vo-copy-cost-fn v-obj)
@@ -278,62 +279,101 @@ value of the largest access-count, or return NIL."
              (let ((new-data-structure (funcall (vo-copy-fn v-obj) (vo-car v-obj)))
                    (new-locks (cons (list (bt:make-lock "left"))
                                     (list (bt:make-lock "right")) )))
-               (setf (cdr (vo-lock v-obj)) new-locks)
-               (setf (vo-lock v-obj) (car new-locks))
+               ;; Set the new lock for all objects in the tree
+               (setf (cdr (vo-rebase-lock v-obj)) new-locks)
+               ;; Set the lock on this object to just the "left" lock
+               (setf (vo-rebase-lock v-obj) (car new-locks))
                (values new-data-structure
                        largest-access-count
                        (cdr new-locks) )))
             (t ; Don't copy
-             (values nil nil nil) ))
-      (destructuring-bind (new-val getter setter)
-          (vo-car v-obj)
-        (multiple-value-bind (ret largest-count new-lock)
-            (raise-object! (vo-cdr v-obj) (1+ cost)
-                           (max largest-access-count
-                                (vo-access-count v-obj) )
-                           force-copy )
-          (cond ((and ret (= largest-count (vo-access-count v-obj)))
-                 ;;; Perform the split
-                 ;; Move the object
-                 (setf (vo-car v-obj) ret)
-                 ;; Mutate object
-                 (funcall setter new-val ret)
-                 ;; New locks
-                 (setf (vo-lock v-obj) new-lock)
-                 ;; Terminate the list
-                 (setf (vo-cdr v-obj) nil)
-                 (values nil nil) )
-                (t
-                 ;; Increment the access counter
-                 (incf (vo-access-count v-obj))
-                 ;; Choose the shorter lock list
-                 (setf (vo-lock v-obj)
-                       (if (< (length (collect-locks (vo-lock v-obj)))
-                              (length (collect-locks (vo-lock (vo-cdr v-obj)))) )
-                           (vo-lock v-obj)
-                           (vo-lock (vo-cdr v-obj)) ))
-                 (cond (ret
-                        ;; Mutate object
-                        (funcall setter new-val ret)
-                        ;; Pass the values to the next level
-                        (values ret largest-count new-lock) )
-                       (t
-                        ;; Move the object
-                        (setf (vo-car v-obj)
-                              (vo-car (vo-cdr v-obj)) )
-                        ;; Invert delta
-                        (setf (vo-car (vo-cdr v-obj))
-                              (list (funcall getter (vo-car v-obj))
-                                    getter setter ))
-                        ;; Mutate object
-                        (funcall setter new-val (vo-car v-obj))
-                        ;; Reverse the list
-                        (setf (vo-cdr (vo-cdr v-obj))
-                              v-obj )
-                        ;; Terminate the list
-                        (setf (vo-cdr v-obj) nil)
-                        (values nil nil nil) ))))))))
-
+             (values) ))
+      (multiple-value-bind (ret largest-count new-lock)
+          (raise-object! (vo-cdr v-obj) (1+ cost)
+                         (max largest-access-count
+                              (vo-access-count v-obj) )
+                         force-copy )
+        (cond ((and ret (= largest-count (vo-access-count v-obj)))
+               ;; Split!
+               (case (first (vo-car v-obj))
+                 (:mod
+                  (destructuring-bind (new-val getter setter)
+                      (cdr (vo-car v-obj))
+                    ;; Set the new value
+                    (setf (vo-car v-obj) ret)
+                    ;; Mutate object
+                    (funcall setter new-val ret)
+                    ;; New locks
+                    (setf (vo-rebase-lock v-obj) new-lock)
+                    ;; Terminate the list
+                    (setf (vo-cdr v-obj) nil)
+                    (values)))
+                 (:replace
+                  (destructuring-bind (replacement process-new-object)
+                      (cdr (vo-car v-obj))
+                    ;; Set the new value
+                    (setf (vo-car v-obj) (funcall process-new-object ret))
+                    ;; New locks
+                    (setf (vo-rebase-lock v-obj) new-lock)
+                    ;; Terminate the list
+                    (setf (vo-cdr v-obj) nil)
+                    (values)))))                  
+              (ret
+               (case (first (vo-car v-obj))
+                 (:mod
+                  (destructuring-bind (new-val getter setter)
+                      (cdr (vo-car v-obj))
+                    (funcall setter new-val ret)
+                    (values ret largest-count new-lock)))
+                 (:replace
+                  (destructuring-bind (replacement process-new-object)
+                      (cdr (vo-car v-obj))
+                    (funcall process-new-object ret)
+                    (values ret largest-count new-lock)))))
+              (t
+               ;; Increment the access counter
+               (incf (vo-access-count v-obj))
+               ;; Choose the shorter lock list
+               (setf (vo-rebase-lock v-obj)
+                     (if (< (length (collect-locks (vo-rebase-lock v-obj)))
+                            (length (collect-locks (vo-rebase-lock (vo-cdr v-obj)))) )
+                         (vo-rebase-lock v-obj)
+                         (vo-rebase-lock (vo-cdr v-obj)) ))
+               (case (first (vo-car v-obj))
+                 (:mod
+                  (destructuring-bind (new-val getter setter)
+                      (cdr (vo-car v-obj))
+                    ;; Move the object
+                    (setf (vo-car v-obj)
+                          (vo-car (vo-cdr v-obj)))
+                    ;; Invert delta
+                    (setf (vo-car (vo-cdr v-obj))
+                          (list :mod (funcall getter (vo-car v-obj))
+                                getter setter ))
+                    ;; Mutate object
+                    (funcall setter new-val (vo-car v-obj))
+                    ;; Reverse the list
+                    (setf (vo-cdr (vo-cdr v-obj))
+                          v-obj)))
+                 (:replace
+                  (destructuring-bind (replacement process-new-object)
+                      (cdr (vo-car v-obj))
+                    ;; Replace object
+                    (setf (vo-car v-obj)
+                          replacement)
+                    ;; Invert delta
+                    (setf (vo-car (vo-cdr v-obj))
+                          (list :replace (vo-car (vo-cdr v-obj)) process-new-object))
+                    ;; Reverse the list
+                    (setf (vo-cdr (vo-cdr v-obj))
+                          v-obj )
+                    ;; Terminate the list
+                    (setf (vo-cdr v-obj) nil)
+                    (values))))
+               ;; Terminate the list
+               (setf (vo-cdr v-obj) nil)
+               ;; Return nothing
+               (values) )))))
 
 ;; @The macro <<vmodf>> acts as the main entry point.  It has the same syntax as
 ;; <<modf>> except no special treatment for <<modf-eval>>.
@@ -345,31 +385,44 @@ that new version of the object.  Several place/value pairs can be given.  In
 between each pair, a symbol must be given to specify where the result of the
 previous calculation should be bound for the rest of the VMODF place/value
 pairs."
-  ;; First we need to find the "container" variable
-  (let ((container (find-container place)))
-    (alexandria:with-gensyms (val-sym v-obj new-version container-sym)
-      `(let* ((,val-sym ,value)
-              (,v-obj ,container)
-              (,new-version
-                (let* ((getter (lambda (,container-sym)
-                                 (let ((,container ,container-sym))
-                                   ,place )))
-                       (setter (lambda (new-val ,container-sym)
-                                 (let ((,container ,container-sym))
-                                   (setf ,place new-val) )))
-                       (delta (list ,val-sym getter setter)) )
-                  (let ((new (copy-structure ,v-obj)))
-                    (setf (vo-car new) delta
-                          (vo-cdr new) ,v-obj )
-                    new ))))
-         (when (or (eql :on-access (vo-rebase ,v-obj))
-                   (eql :on-modification (vo-rebase ,v-obj)) )
-           (with-rebase-locks (vo-lock ,new-version)
-             (raise-object! ,new-version) ))
-         ,(if more
-              `(let ((,(first more) ,new-version))
-                 (vmodf ,@(cdr more)) )
-              new-version )))))
+  (cond ((atom place)
+         ;; This will be a replacement delta
+         `(let* ((delta (list :replace ,value #'identity)))
+            (let ((new (copy-structure ,place)))
+              (setf (vo-car new) delta
+                    (vo-cdr new) ,place)
+              (when (member (vo-rebase ,place) '(:on-access :on-modification))
+                (with-rebase-locks (new)
+                  (raise-object! new)))
+              ,(if more
+                   `(let ((,(first more) new))
+                      (vmodf ,@(cdr more)))
+                   'new))))
+        (t
+         ;; First we need to find the "container" variable
+         (let ((container (find-container place)))
+           (alexandria:with-gensyms (val-sym v-obj new-version container-sym)
+             `(let* ((,val-sym ,value)
+                     (,v-obj ,container)
+                     (,new-version
+                       (let* ((getter (lambda (,container-sym)
+                                        (let ((,container ,container-sym))
+                                          ,place )))
+                              (setter (lambda (new-val ,container-sym)
+                                        (let ((,container ,container-sym))
+                                          (setf ,place new-val) )))
+                              (delta (list :mod ,val-sym getter setter)) )
+                         (let ((new (copy-structure ,v-obj)))
+                           (setf (vo-car new) delta
+                                 (vo-cdr new) ,v-obj )
+                           new ))))
+                (when (member (vo-rebase ,v-obj) '(:on-access :on-modification))
+                  (with-rebase-locks (,new-version)
+                    (raise-object! ,new-version) ))
+                ,(if more
+                     `(let ((,(first more) ,new-version))
+                        (vmodf ,@(cdr more)) )
+                     new-version )))))))
 
 ;; @\section{Accessing data in a versioned object}
 
