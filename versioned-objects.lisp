@@ -408,7 +408,7 @@ list."
   "The macro vaccess provides a slightly less annoying way to access a value
 from a versioned-object.  This exands the access form by littering it with
 VFUNCALLs."
-  (if (atom form)
+  (if (or (atom form) (member (first form) '(quote member)))
       form
       (list* 'vfuncall (list 'quote (first form))
              (mapcar (lambda (x) (macroexpand (list 'vaccess x))) (rest form)) )))
