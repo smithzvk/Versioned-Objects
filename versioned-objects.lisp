@@ -7,7 +7,8 @@
            #:vfuncall #:vapply
            #:vaccess
            #:with-versioned-object #:with-versioned-objects
-           #:vmodf ))
+           #:vmodf
+           #:with-versioning))
 
 (in-package :versioned-objects)
 
@@ -86,12 +87,29 @@
 (defstruct (versioned-object (:constructor %make-versioned-object)
                              (:conc-name :vo-) )
   car cdr (access-count 0)
+  (valid? (list t))
   object-type
   copy-fn copy-cost-fn
   tree-splitting-method
   rebase
   contention-resolution
   rebase-lock )
+
+;;<<>>=
+(defun ensure-list (x) (if (listp x) x (list x)))
+
+;;<<>>=
+(defmacro with-versioning ((&rest objects) &body body)
+  (if objects
+      `(let ((,(first (ensure-list (first objects)))
+               ,(cons 'version (ensure-list (first objects)))))
+         (unwind-protect
+              (with-versioning (,@(cdr objects))
+                ,@body)
+           (with-rebase-locks (,(first (ensure-list (first objects))))
+             (raise-object! ,(first (ensure-list (first objects))))
+             (setf (car (vo-valid? ,(first (ensure-list (first objects))))) nil))))
+      `(progn ,@body)))
 
 ;; @The function <<version>> takes an object and wraps it in a
 ;; <<versioned-object>> structure.
