@@ -102,10 +102,14 @@
 (defmacro with-versioning ((&rest objects) &body body)
   (if objects
       `(let ((,(first (ensure-list (first objects)))
-               ,(cons 'version (ensure-list (first objects)))))
+               ,(if (consp (first objects))
+                    (cons 'version (rest (first objects)))
+                    (cons 'version (ensure-list (first objects))))))
          (unwind-protect
-              (with-versioning (,@(cdr objects))
-                ,@body)
+              (let ((,(first (ensure-list (first objects)))
+                      ,(first (ensure-list (first objects)))))
+                (with-versioning (,@(cdr objects))
+                  ,@body))
            (with-rebase-locks (,(first (ensure-list (first objects))))
              (raise-object! ,(first (ensure-list (first objects))))
              (setf (car (vo-valid? ,(first (ensure-list (first objects))))) nil))))
