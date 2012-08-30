@@ -5,5 +5,5 @@
   :license "BSD"
   :components ((:file "versioned-objects-test"))
   :serial t
-  :depends-on (:iterate :versioned-objects :stefil :bordeaux-threads :modf) )
+  :depends-on (:iterate :versioned-objects :stefil :bordeaux-threads :modf))
 

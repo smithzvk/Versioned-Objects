@@ -18,7 +18,7 @@
 ;; the most use.
 
 (defmacro time-operation ((&key (repeat 10000) (min-sample-time 5))
-                          &body body )
+                          &body body)
   `(let* ((start-time (get-internal-real-time))
           (end-time start-time)
           (times (iter
@@ -26,13 +26,13 @@
                    (until (> (setf end-time (get-internal-real-time))
                              (+ start-time
                                 (* ,min-sample-time
-                                   internal-time-units-per-second ))))
+                                   internal-time-units-per-second))))
                    (iter (for i below ,repeat)
-                     ,@body )
-                   (finally (return times)) )))
+                     ,@body)
+                   (finally (return times)))))
      (float
       (/ (* ,repeat times) (/ (- end-time start-time)
-                              internal-time-units-per-second )) 0d0)))
+                              internal-time-units-per-second)) 0d0)))
 
 (defun measure-rebase-time (vo n-edits)
   "Measure how long it takes to rebase the array."
@@ -40,14 +40,14 @@
          (arr2 (iter (for i below n-edits)
                  (for new-arr
                    initially (vmodf (aref arr1 (random 10)) (random 10))
-                   then (vmodf (aref new-arr (random 10)) (random 10)) )
-                 (finally (return new-arr)) )))
+                   then (vmodf (aref new-arr (random 10)) (random 10)))
+                 (finally (return new-arr)))))
     (let ((rebases-per-second (time-operation ()
                                 (raise-object! arr1)
-                                (raise-object! arr2) )))
+                                (raise-object! arr2))))
       (values rebases-per-second
               ;; Deltas per second
-              (* rebases-per-second n-edits) ))))
+              (* rebases-per-second n-edits)))))
 
 ;; @Preliminary results suggest that using a more speciallized approach to
 ;; versioning can push rebase speed up by ~40%.
@@ -60,9 +60,9 @@ off of the most recent version."
             (iter (for i below n-versions-before-rebase)
               (for new-arr
                    initially (vmodf (aref vo (random 10)) (random 10))
-                   then (vmodf (aref new-arr (random 10)) (random 10)) )
-              (finally (return new-arr)) ))))
-    (values versions-per-second) ))
+                   then (vmodf (aref new-arr (random 10)) (random 10)))
+              (finally (return new-arr))))))
+    (values versions-per-second)))
 
 (defun measure-in-place-walk-time (n-edits)
   "Measure how long it takes to read a value from the datastructure without

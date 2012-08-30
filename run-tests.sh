@@ -13,7 +13,7 @@ then
 (ql:quickload :versioned-objects-test)
 (stefil:without-debugging (versioned-objects-test:run-tests))
 (with-open-file (out #p"test-results" :if-exists :append :direction :output)
- (format out "sbcl: ~A~%" stefil:*last-test-result*) )
+ (format out "sbcl: ~A~%" stefil:*last-test-result*))
 EOF
 fi
 
@@ -24,7 +24,7 @@ then
 (ql:quickload :versioned-objects-test)
 (stefil:without-debugging (versioned-objects-test:run-tests))
 (with-open-file (out #p"test-results" :if-exists :append :direction :output)
- (format out "cmucl: ~A~%" stefil:*last-test-result*) )
+ (format out "cmucl: ~A~%" stefil:*last-test-result*))
 (quit)
 EOF
 fi
@@ -35,7 +35,7 @@ then
 (ql:quickload :versioned-objects-test)
 (stefil:without-debugging (versioned-objects-test:run-tests))
 (with-open-file (out #p"test-results" :if-exists :append :direction :output)
- (format out "ccl: ~A~%" stefil:*last-test-result*) )
+ (format out "ccl: ~A~%" stefil:*last-test-result*))
 EOF
 fi
 
@@ -45,7 +45,7 @@ then
 (ql:quickload :versioned-objects-test)
 (stefil:without-debugging (versioned-objects-test:run-tests))
 (with-open-file (out #p"test-results" :if-exists :append :direction :output)
- (format out "ccl64: ~A~%" stefil:*last-test-result*) )
+ (format out "ccl64: ~A~%" stefil:*last-test-result*))
 EOF
 fi
 
@@ -92,7 +92,7 @@ then
 (ql:quickload :versioned-objects-test)
 (stefil:without-debugging (versioned-objects-test:run-tests))
 (with-open-file (out #p"test-results" :if-exists :append :direction :output)
- (format out "sbcl: ~A~%" stefil:*last-test-result*) )
+ (format out "sbcl: ~A~%" stefil:*last-test-result*))
 EOF
 fi
 
@@ -103,7 +103,7 @@ then
 (ql:quickload :versioned-objects-test)
 (stefil:without-debugging (versioned-objects-test:run-tests))
 (with-open-file (out #p"test-results" :if-exists :append :direction :output)
- (format out "cmucl: ~A~%" stefil:*last-test-result*) )
+ (format out "cmucl: ~A~%" stefil:*last-test-result*))
 (quit)
 EOF
 fi
@@ -114,7 +114,7 @@ then
 (ql:quickload :versioned-objects-test)
 (stefil:without-debugging (versioned-objects-test:run-tests))
 (with-open-file (out #p"test-results" :if-exists :append :direction :output)
- (format out "ccl: ~A~%" stefil:*last-test-result*) )
+ (format out "ccl: ~A~%" stefil:*last-test-result*))
 EOF
 fi
 
@@ -124,7 +124,7 @@ then
 (ql:quickload :versioned-objects-test)
 (stefil:without-debugging (versioned-objects-test:run-tests))
 (with-open-file (out #p"test-results" :if-exists :append :direction :output)
- (format out "ccl64: ~A~%" stefil:*last-test-result*) )
+ (format out "ccl64: ~A~%" stefil:*last-test-result*))
 EOF
 fi
 

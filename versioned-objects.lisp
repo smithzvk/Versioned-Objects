@@ -13,7 +13,7 @@
 (in-package :versioned-objects)
 
 (defvar *inefficiency-warnings* t
-  "Display warnings when inefficient usage is detected." )
+  "Display warnings when inefficient usage is detected.")
 
 ;; @\section{introduction}
 
@@ -85,7 +85,7 @@
 
 ;;<<versioned-object>>=
 (defstruct (versioned-object (:constructor %make-versioned-object)
-                             (:conc-name :vo-) )
+                             (:conc-name :vo-))
   car cdr (access-count 0)
   (valid? (list t))
   object-type
@@ -93,7 +93,7 @@
   tree-splitting-method
   rebase
   contention-resolution
-  rebase-lock )
+  rebase-lock)
 
 ;;<<>>=
 (defun ensure-list (x) (if (listp x) x (list x)))
@@ -123,12 +123,12 @@
   (cons (car lock-structures)
         (when (cdr lock-structures)
           (append (collect-locks (cadr lock-structures))
-                  (collect-locks (cddr lock-structures)) ))))
+                  (collect-locks (cddr lock-structures))))))
 
 ;;<<>>=
 (defmacro with-rebase-locks* ((&rest objects) &body body)
   (let ((held-locks (gensym))
-        (v-obj (gensym)) )
+        (v-obj (gensym)))
     `(let ((,held-locks nil))
        (unwind-protect
             (progn
@@ -140,20 +140,20 @@
                       (case (vo-contention-resolution ,v-obj)
                         (:error
                          (error
-                          "We are already accessing a version of this structure" ))
+                          "We are already accessing a version of this structure"))
                         (:split-tree
-                         (raise-object! ,v-obj 0 0 t) ))))
-                  (push lock ,held-locks) ))
-              ,@body )
+                         (raise-object! ,v-obj 0 0 t)))))
+                  (push lock ,held-locks)))
+              ,@body)
          (iter (for lock in ,held-locks)
            (handler-case (bt:release-lock lock)
              (error ()
-               (warn "Error while releasing lock ~A" lock) )))))))
+               (warn "Error while releasing lock ~A" lock))))))))
 
 ;;<<>>=
 (defmacro with-rebase-locks ((&rest objects) &body body)
   (let ((held-locks (gensym))
-        (v-obj (gensym)) )
+        (v-obj (gensym)))
     `(let ((,held-locks nil))
        (unwind-protect
             (progn
@@ -165,15 +165,15 @@
                       (case (vo-contention-resolution ,v-obj)
                         (:error
                          (error
-                          "We are already accessing a version of this structure" ))
+                          "We are already accessing a version of this structure"))
                         (:split-tree
-                         (raise-object! ,v-obj 0 0 t) ))))
-                  (push lock ,held-locks) ))
-              ,@body )
+                         (raise-object! ,v-obj 0 0 t)))))
+                  (push lock ,held-locks)))
+              ,@body)
          (iter (for lock in ,held-locks)
            (handler-case (bt:release-lock lock)
              (error ()
-               (warn "Error while releasing lock ~A" lock) )))))))
+               (warn "Error while releasing lock ~A" lock))))))))
 
 ;;<<>>=
 (defmacro with-locks (locks &body body)
@@ -188,15 +188,15 @@
                     (case (vo-contention-resolution lock)
                       (:error
                        (error
-                        "We are already accessing a version of this structure" ))
+                        "We are already accessing a version of this structure"))
                       (:split-tree
-                       (raise-object! v-obj 0 0 t) )))) 
-                (push lock ,held-locks) )
-              ,@body )
+                       (raise-object! v-obj 0 0 t))))) 
+                (push lock ,held-locks))
+              ,@body)
          (iter (for lock in ,held-locks)
            (handler-case (bt:release-lock lock)
              (error ()
-               (warn "Error while releasing lock ~A" lock) )))))))
+               (warn "Error while releasing lock ~A" lock))))))))
 
 ;;<<>>=
 (defun version (object
@@ -206,7 +206,7 @@
                      copy-cost-fn
                      match-fn
                      (contention-resolution :error)
-                     (tree-splitting-method :none) )
+                     (tree-splitting-method :none))
   "Convert an object into a versioned object."
   (declare (ignore match-fn contention-resolution))
   (%make-versioned-object :car object
@@ -216,7 +216,7 @@
                           :copy-fn copy-fn
                           :copy-cost-fn copy-cost-fn
                           :tree-splitting-method tree-splitting-method
-                          :rebase rebase ))
+                          :rebase rebase))
 
 ;; @\subsection{Advanced control of the versioning of objects}
 
@@ -296,25 +296,25 @@ value of the largest access-count, or return NIL."
                  (and (eql :edit-length (vo-tree-splitting-method v-obj))
                       (vo-copy-fn v-obj) (vo-copy-cost-fn v-obj)
                       (< (funcall (vo-copy-cost-fn v-obj) (vo-car v-obj))
-                         cost )))
+                         cost)))
              ;; New locks
              (let ((new-data-structure (funcall (vo-copy-fn v-obj) (vo-car v-obj)))
                    (new-locks (cons (list (bt:make-lock "left"))
-                                    (list (bt:make-lock "right")) )))
+                                    (list (bt:make-lock "right")))))
                ;; Set the new lock for all objects in the tree
                (setf (cdr (vo-rebase-lock v-obj)) new-locks)
                ;; Set the lock on this object to just the "left" lock
                (setf (vo-rebase-lock v-obj) (car new-locks))
                (values new-data-structure
                        largest-access-count
-                       (cdr new-locks) )))
+                       (cdr new-locks))))
             (t ; Don't copy
-             (values) ))
+             (values)))
       (multiple-value-bind (ret largest-count new-lock)
           (raise-object! (vo-cdr v-obj) (1+ cost)
                          (max largest-access-count
-                              (vo-access-count v-obj) )
-                         force-copy )
+                              (vo-access-count v-obj))
+                         force-copy)
         (cond ((and ret (= largest-count (vo-access-count v-obj)))
                ;; Split!
                (case (first (vo-car v-obj))
@@ -358,9 +358,9 @@ value of the largest access-count, or return NIL."
                ;; Choose the shorter lock list
                (setf (vo-rebase-lock v-obj)
                      (if (< (length (collect-locks (vo-rebase-lock v-obj)))
-                            (length (collect-locks (vo-rebase-lock (vo-cdr v-obj)))) )
+                            (length (collect-locks (vo-rebase-lock (vo-cdr v-obj)))))
                          (vo-rebase-lock v-obj)
-                         (vo-rebase-lock (vo-cdr v-obj)) ))
+                         (vo-rebase-lock (vo-cdr v-obj))))
                (case (first (vo-car v-obj))
                  (:mod
                   (destructuring-bind (new-val getter setter)
@@ -371,7 +371,7 @@ value of the largest access-count, or return NIL."
                     ;; Invert delta
                     (setf (vo-car (vo-cdr v-obj))
                           (list :mod (funcall getter (vo-car v-obj))
-                                getter setter ))
+                                getter setter))
                     ;; Mutate object
                     (funcall setter new-val (vo-car v-obj))
                     ;; Reverse the list
@@ -388,14 +388,14 @@ value of the largest access-count, or return NIL."
                           (list :replace (vo-car (vo-cdr v-obj)) process-new-object))
                     ;; Reverse the list
                     (setf (vo-cdr (vo-cdr v-obj))
-                          v-obj )
+                          v-obj)
                     ;; Terminate the list
                     (setf (vo-cdr v-obj) nil)
                     (values))))
                ;; Terminate the list
                (setf (vo-cdr v-obj) nil)
                ;; Return nothing
-               (values) )))))
+               (values))))))
 
 ;; @The macro <<vmodf>> acts as the main entry point.  It has the same syntax as
 ;; <<modf>> except no special treatment for <<modf-eval>>.
@@ -429,22 +429,22 @@ pairs."
                      (,new-version
                        (let* ((getter (lambda (,container-sym)
                                         (let ((,container ,container-sym))
-                                          ,place )))
+                                          ,place)))
                               (setter (lambda (new-val ,container-sym)
                                         (let ((,container ,container-sym))
-                                          (setf ,place new-val) )))
-                              (delta (list :mod ,val-sym getter setter)) )
+                                          (setf ,place new-val))))
+                              (delta (list :mod ,val-sym getter setter)))
                          (let ((new (copy-structure ,v-obj)))
                            (setf (vo-car new) delta
-                                 (vo-cdr new) ,v-obj )
-                           new ))))
+                                 (vo-cdr new) ,v-obj)
+                           new))))
                 (when (member (vo-rebase ,v-obj) '(:on-access :on-modification))
                   (with-rebase-locks (,new-version)
-                    (raise-object! ,new-version) ))
+                    (raise-object! ,new-version)))
                 ,(if more
                      `(let ((,(first more) ,new-version))
-                        (vmodf ,@(cdr more)) )
-                     new-version )))))))
+                        (vmodf ,@(cdr more)))
+                     new-version)))))))
 
 ;; @\section{Accessing data in a versioned object}
 
@@ -464,19 +464,19 @@ specified by the first argument with the rest of the arguments as its argument
 list."
   (with-rebase-locks* (iter (for arg in (cons fn args))
                        (when (versioned-object-p arg)
-                         (collect arg) ))
+                         (collect arg)))
     (let ((new-args
             (iter (for arg in (cons fn args))
               (collecting
                (cond ((versioned-object-p arg)
                       (raise-object! arg)
-                      (vo-car arg) )
-                     (t arg) )))))
-      (apply #'funcall new-args) )))
+                      (vo-car arg))
+                     (t arg))))))
+      (apply #'funcall new-args))))
 
 ;;<<>>=
 (defun vapply (fn &rest args)
-  (apply #'vfuncall fn (apply #'list* args)) )
+  (apply #'vfuncall fn (apply #'list* args)))
 
 ;;<<>>=
 (defmacro vaccess (form)
@@ -486,7 +486,7 @@ VFUNCALLs."
   (if (or (atom form) (member (first form) '(quote function)))
       form
       (list* 'vfuncall (list 'quote (first form))
-             (mapcar (lambda (x) (macroexpand (list 'vaccess x))) (rest form)) )))
+             (mapcar (lambda (x) (macroexpand (list 'vaccess x))) (rest form)))))
 
 ;; @We recognize that your data is less useful when it is locked into a
 ;; <<verioned-object>> structure, so we allow for a way to temporarily retrieve
@@ -507,14 +507,14 @@ VFUNCALLs."
   `(with-rebase-locks (list ,object)
      (raise-object! ,object)
      (let ((,object (vo-car ,object)))
-       ,@body )))
+       ,@body)))
 
 ;;<<>>=
 (defmacro with-versioned-objects (objects &body body)
   `(with-rebase-locks (list ,@objects)
      ,@(mapcar (lambda (x) (list 'raise-object! x)) objects)
      (let (,(mapcar (lambda (x) (list x `(vo-car ,x))) objects))
-       ,@body )))
+       ,@body)))
 
 ;; @\section{Printing}
 
@@ -525,13 +525,13 @@ VFUNCALLs."
   "When T, objects are printed specially as \"#<Versioned <OBJECT>>\".  If NIL
 then the true object is printed (a structure) whose representation can be quite
 large.  This is useful for debugging as the special printer, in general, alters
-the data structure." )
+the data structure.")
 
 ;;<<>>=
 (defmethod print-object ((obj versioned-object) stream)
   (if *versioned-object-printer*
       (vfuncall 'format stream "#<Versioned ~A>" obj)
-      (call-next-method) ))
+      (call-next-method)))
 
 ;; @\section{Thread Safety}
 
@@ -659,11 +659,11 @@ the data structure." )
 ;;   (iter
 ;;     (for val1 in-sequence arr1)
 ;;     (for val2 in-sequence arr2)
-;;     (always (eql val1 val2)) ))
+;;     (always (eql val1 val2))))
 
 ;; (let* ((arr1 (version (make-array '(10) :initial-element 0)))
-;;        (arr2 (vmodf (aref arr1 0) 5)) )
-;;   (vfuncall 'compare-arrays arr1 arr2) )
+;;        (arr2 (vmodf (aref arr1 0) 5)))
+;;   (vfuncall 'compare-arrays arr1 arr2))
 
 ;; @\section{Tree Splitting}
 
